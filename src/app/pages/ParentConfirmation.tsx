@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "react-router";
+import { useParams } from "react-router-dom";
 import { Logo } from "../components/Logo";
 import { mockReports } from "../data/mockData";
 import { CheckCircle, Calendar } from "lucide-react";

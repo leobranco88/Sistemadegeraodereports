@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams } from "react-router-dom";
 import { Logo } from "../components/Logo";
 import { Stepper } from "../components/Stepper";
 import { RatingStars } from "../components/RatingStars";

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate } from "react-router-dom";
 import { Logo } from "../components/Logo";
 import { StatusBadge } from "../components/StatusBadge";
 import { mockStudents, mockReports } from "../data/mockData";

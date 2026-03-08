@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router";
+import { useParams, useNavigate } from "react-router-dom";
 import { Logo } from "../components/Logo";
 import { mockReports, mockStudents } from "../data/mockData";
 import { ArrowLeft, Download, TrendingUp, TrendingDown, Minus, QrCode, Star } from "lucide-react";
