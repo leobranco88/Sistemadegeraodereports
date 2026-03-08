@@ -1,5 +1,4 @@
-import logoImage from 'figma:asset/973d40a9fb6437d871c3d69d0e9b66f96d7dea7c.png';
-
+import logoImage from '../../assets/eic-logo-transparente.png';
 export function Logo() {
   return (
     <div className="flex items-center gap-3">
