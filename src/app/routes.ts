@@ -6,6 +6,8 @@ import { ViewReport } from "./pages/ViewReport";
 import { CoordinatorDashboard } from "./pages/CoordinatorDashboard";
 import { ParentConfirmation } from "./pages/ParentConfirmation";
 import { NotFound } from "./pages/NotFound";
+import GerenciarProfessores from "./pages/GerenciarProfessores";
+import GerenciarHorarios from "./pages/GerenciarHorarios";
 
 export const router = createBrowserRouter([
   { path: "/", Component: Login },
@@ -14,5 +16,7 @@ export const router = createBrowserRouter([
   { path: "/report/create/:studentId?", Component: CreateReport },
   { path: "/report/view/:reportId", Component: ViewReport },
   { path: "/confirm/:reportId", Component: ParentConfirmation },
+  { path: "/secretaria/professores", Component: GerenciarProfessores },
+  { path: "/secretaria/horarios", Component: GerenciarHorarios },
   { path: "*", Component: NotFound },
 ]);
