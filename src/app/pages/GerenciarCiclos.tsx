@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Header } from "../components/Header";
-import { Plus, Calendar, Clock, CheckCircle, AlertTriangle, X, ChevronDown } from "lucide-react";
+import { Plus, Calendar, Clock, CheckCircle, AlertTriangle, X } from "lucide-react";
 import { db } from "../../firebase";
 import { collection, getDocs, addDoc, deleteDoc, doc, query, orderBy } from "firebase/firestore";
 
@@ -34,6 +34,7 @@ interface Relatorio {
   id: string;
   studentId: string;
   status: string;
+  period?: string;
 }
 
 const periodos = [
@@ -57,7 +58,7 @@ export default function GerenciarCiclos() {
   const [deadline, setDeadline] = useState("");
   const [alunosSelecionados, setAlunosSelecionados] = useState<string[]>([]);
 
-  const alunosFiltrados = alunos.filter(a => a.professorId === professorSelecionado && a.ativo);
+  const alunosFiltrados = alunos.filter(a => a.professorId === professorSelecionado && a.ativo !== false);
 
   useEffect(() => {
     buscarDados();
@@ -136,9 +137,11 @@ export default function GerenciarCiclos() {
   const getProgressoCiclo = (ciclo: Ciclo) => {
     const total = ciclo.alunoIds.length;
     const feitos = relatorios.filter(r =>
-      ciclo.alunoIds.includes(r.studentId) && r.status === "published"
+      ciclo.alunoIds.includes(r.studentId) &&
+      r.status === "published" &&
+      r.period === ciclo.periodo
     ).length;
-    return { feitos, total, pct: total > 0 ? Math.round((feitos / total) * 100) : 0 };
+    return { feitos, total, pct: total > 0 ? Math.min(Math.round((feitos / total) * 100), 100) : 0 };
   };
 
   const getStatusDeadline = (deadline: string) => {
@@ -163,12 +166,10 @@ export default function GerenciarCiclos() {
           </button>
         </div>
 
-        {/* Formulário */}
         {mostrarFormulario && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
             <h2 className="text-lg font-medium mb-4" style={{ color: "#573000" }}>Criar Novo Ciclo</h2>
             <form onSubmit={criarCiclo} className="space-y-5">
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-2" style={{ color: "#3D3D3D" }}>Professor</label>
@@ -251,7 +252,6 @@ export default function GerenciarCiclos() {
           </div>
         )}
 
-        {/* Lista de Ciclos */}
         {carregando ? (
           <div className="text-center py-12">
             <div className="w-10 h-10 border-4 border-[#EC5800] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -289,7 +289,6 @@ export default function GerenciarCiclos() {
                     </div>
                   </div>
 
-                  {/* Progresso */}
                   <div className="mb-4">
                     <div className="flex items-center justify-between text-sm mb-1">
                       <span style={{ color: "#3D3D3D" }}>Relatórios publicados</span>
@@ -303,10 +302,12 @@ export default function GerenciarCiclos() {
                     </div>
                   </div>
 
-                  {/* Alunos */}
                   <div className="flex flex-wrap gap-2">
                     {ciclo.alunosNomes.map((nome, i) => {
-                      const rel = relatorios.find(r => r.studentId === ciclo.alunoIds[i]);
+                      const rel = relatorios.find(r =>
+                        r.studentId === ciclo.alunoIds[i] &&
+                        r.period === ciclo.periodo
+                      );
                       const publicado = rel?.status === "published";
                       return (
                         <span key={i} className="px-3 py-1 rounded-full text-xs font-medium"
