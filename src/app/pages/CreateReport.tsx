@@ -39,7 +39,7 @@ const periodFromUrl = new URLSearchParams(location.search).get("period");
 
   const [selectedStudent, setSelectedStudent] = useState(studentId || "");
   const [classType, setClassType] = useState<ClassType>("regular");
-  const [period, setPeriod] = useState("Mid-Year Report · 2026");
+  const [period, setPeriod] = useState(periodFromUrl || "Mid-Year Report · 2026");
   const [evaluation, setEvaluation] = useState<"1 de 2 ciclos" | "2 de 2 ciclos">("1 de 2 ciclos");
   const [coordinator, setCoordinator] = useState("Leonardo Branco Costa");
 
