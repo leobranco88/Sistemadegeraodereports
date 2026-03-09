@@ -3,18 +3,28 @@ import { useNavigate } from "react-router-dom";
 import { Logo } from "../components/Logo";
 import { StatusBadge } from "../components/StatusBadge";
 import { User } from "../types";
-import { Users, FileText, Clock, CheckCircle, Plus, Eye, LogOut } from "lucide-react";
+import { FileText, Clock, CheckCircle, Plus, Eye, LogOut, AlertTriangle, Calendar } from "lucide-react";
 import { auth, db } from "../../firebase";
 import { signOut } from "firebase/auth";
 import { collection, getDocs, query, where } from "firebase/firestore";
+
+interface Ciclo {
+  id: string;
+  turma: string;
+  professorId: string;
+  professorNome: string;
+  periodo: string;
+  deadline: string;
+  alunoIds: string[];
+  alunosNomes: string[];
+  criadoEm: string;
+}
 
 interface Aluno {
   id: string;
   nome: string;
   turma: string;
   tipo: string;
-  ativo: boolean;
-  professorId: string;
 }
 
 interface Relatorio {
@@ -26,6 +36,7 @@ interface Relatorio {
 export function ProfessorDashboard() {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [ciclos, setCiclos] = useState<Ciclo[]>([]);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [relatorios, setRelatorios] = useState<Relatorio[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -37,19 +48,19 @@ export function ProfessorDashboard() {
 
       try {
         const profSnap = await getDocs(query(collection(db, "professores"), where("email", "==", user.email)));
-        
+
         if (!profSnap.empty) {
           const professorId = profSnap.docs[0].id;
-          
-          const alunosSnap = await getDocs(query(collection(db, "alunos"), where("professorId", "==", professorId), where("ativo", "==", true)));
-          const alunosDados = alunosSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Aluno[];
-          setAlunos(alunosDados);
 
-          if (alunosDados.length > 0) {
-            const relSnap = await getDocs(collection(db, "reports"));
-            const relDados = relSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Relatorio[];
-            setRelatorios(relDados.filter(r => alunosDados.some(a => a.id === r.studentId)));
-          }
+          const [ciclosSnap, alunosSnap, relSnap] = await Promise.all([
+            getDocs(query(collection(db, "ciclos"), where("professorId", "==", professorId))),
+            getDocs(collection(db, "alunos")),
+            getDocs(collection(db, "reports")),
+          ]);
+
+          setCiclos(ciclosSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Ciclo[]);
+          setAlunos(alunosSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Aluno[]);
+          setRelatorios(relSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Relatorio[]);
         }
       } catch (err) {
         console.error("Erro ao buscar dados:", err);
@@ -67,12 +78,27 @@ export function ProfessorDashboard() {
 
   const getRelatorio = (alunoId: string) => relatorios.find(r => r.studentId === alunoId);
 
-  const stats = {
-    total: alunos.length,
-    created: relatorios.length,
-    pending: relatorios.filter(r => r.status === "sent").length,
-    confirmed: relatorios.filter(r => r.status === "confirmed").length,
+  const getAluno = (alunoId: string) => alunos.find(a => a.id === alunoId);
+
+  const getStatusDeadline = (deadline: string) => {
+    const hoje = new Date();
+    const prazo = new Date(deadline);
+    const diff = Math.ceil((prazo.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+    if (diff < 0) return { label: "Atrasado!", bg: "#FEE2E2", color: "#DC2626", icon: <AlertTriangle size={14} /> };
+    if (diff <= 2) return { label: `${diff}d restantes`, bg: "#FEF3C7", color: "#92400E", icon: <Clock size={14} /> };
+    return { label: `${diff}d restantes`, bg: "#D1FAE5", color: "#065F46", icon: <CheckCircle size={14} /> };
   };
+
+  const formatarData = (iso: string) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return d.toLocaleDateString("pt-BR");
+  };
+
+  const totalRelatorios = ciclos.reduce((acc, c) => acc + c.alunoIds.length, 0);
+  const totalPublicados = ciclos.reduce((acc, c) =>
+    acc + c.alunoIds.filter(id => getRelatorio(id)?.status === "published").length, 0);
+  const totalAtrasados = ciclos.filter(c => new Date(c.deadline) < new Date()).length;
 
   return (
     <div className="min-h-screen bg-[#F7F6F3]">
@@ -88,14 +114,16 @@ export function ProfessorDashboard() {
           </button>
         </div>
       </header>
+
       <main className="max-w-6xl mx-auto px-6 py-8">
         <h1 className="text-2xl font-bold text-[#070738] mb-6">Dashboard do Professor</h1>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
           {[
-            { label: "Total de alunos", value: stats.total, icon: Users },
-            { label: "Relatórios criados", value: stats.created, icon: FileText },
-            { label: "Aguardando", value: stats.pending, icon: Clock },
-            { label: "Confirmados", value: stats.confirmed, icon: CheckCircle },
+            { label: "Relatórios pendentes", value: totalRelatorios - totalPublicados, icon: FileText },
+            { label: "Publicados", value: totalPublicados, icon: CheckCircle },
+            { label: "Ciclos atrasados", value: totalAtrasados, icon: AlertTriangle },
           ].map(({ label, value, icon: Icon }) => (
             <div key={label} className="bg-white rounded-xl p-5 border border-[#E5E7EB]">
               <div className="flex items-center justify-between mb-2">
@@ -106,61 +134,105 @@ export function ProfessorDashboard() {
             </div>
           ))}
         </div>
-        <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
-          {carregando ? (
-            <div className="text-center py-12">
-              <div className="w-10 h-10 border-4 border-[#EC5800] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-[#6B7280]">Carregando alunos...</p>
-            </div>
-          ) : (
-            <table className="w-full">
-              <thead className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
-                <tr>
-                  {["Aluno", "Turma", "Tipo", "Status", "Ações"].map(h => (
-                    <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-[#6B7280] uppercase">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#F3F4F6]">
-                {alunos.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-[#6B7280]">
-                      Nenhum aluno cadastrado ainda.
-                    </td>
-                  </tr>
-                ) : (
-                  alunos.map(aluno => {
-                    const relatorio = getRelatorio(aluno.id);
-                    return (
-                      <tr key={aluno.id} className="hover:bg-[#F9FAFB]">
-                        <td className="px-6 py-4 text-sm font-medium text-[#111827]">{aluno.nome}</td>
-                        <td className="px-6 py-4 text-sm text-[#6B7280]">{aluno.turma}</td>
-                        <td className="px-6 py-4 text-sm text-[#6B7280]">{aluno.tipo}</td>
-                        <td className="px-6 py-4">
-                          <StatusBadge status={relatorio?.status || "not-started"} />
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            {relatorio && (
-                              <button onClick={() => navigate("/report/view/" + relatorio.id)}
-                                className="bg-[#070738] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                                <Eye size={14} /> Ver
-                              </button>
-                            )}
-                            <button onClick={() => navigate("/report/create/" + aluno.id)}
-                              className="bg-[#EC5800] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                              <Plus size={14} /> {relatorio ? "Novo" : "Criar"}
-                            </button>
-                          </div>
-                        </td>
+
+        {/* Ciclos */}
+        {carregando ? (
+          <div className="text-center py-12">
+            <div className="w-10 h-10 border-4 border-[#EC5800] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-[#6B7280]">Carregando ciclos...</p>
+          </div>
+        ) : ciclos.length === 0 ? (
+          <div className="bg-white rounded-xl border border-[#E5E7EB] p-12 text-center">
+            <Calendar size={48} className="mx-auto mb-4 text-[#E5E7EB]" />
+            <p className="text-[#6B7280]">Nenhum ciclo atribuído ainda.</p>
+            <p className="text-sm text-[#9CA3AF] mt-1">A secretaria criará um ciclo quando houver relatórios para fazer.</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {ciclos.map(ciclo => {
+              const prazo = getStatusDeadline(ciclo.deadline);
+              const publicados = ciclo.alunoIds.filter(id => getRelatorio(id)?.status === "published").length;
+              const pct = ciclo.alunoIds.length > 0 ? Math.round((publicados / ciclo.alunoIds.length) * 100) : 0;
+
+              return (
+                <div key={ciclo.id} className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
+                  {/* Cabeçalho do ciclo */}
+                  <div className="px-6 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
+                    <div>
+                      <h2 className="font-bold text-[#070738]">{ciclo.turma} — {ciclo.periodo}</h2>
+                      <div className="flex items-center gap-4 mt-1">
+                        <span className="text-xs text-[#6B7280] flex items-center gap-1">
+                          <Calendar size={12} /> Criado em {formatarData(ciclo.criadoEm)}
+                        </span>
+                        <span className="text-xs text-[#6B7280]">
+                          Prazo: {new Date(ciclo.deadline).toLocaleDateString("pt-BR")}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium"
+                        style={{ backgroundColor: prazo.bg, color: prazo.color }}>
+                        {prazo.icon} {prazo.label}
+                      </span>
+                      <span className="text-sm font-medium text-[#6B7280]">{publicados}/{ciclo.alunoIds.length} publicados</span>
+                    </div>
+                  </div>
+
+                  {/* Barra de progresso */}
+                  <div className="px-6 py-2 bg-[#F9FAFB]">
+                    <div className="w-full h-1.5 rounded-full bg-[#E5E7EB]">
+                      <div className="h-1.5 rounded-full transition-all"
+                        style={{ width: `${pct}%`, backgroundColor: pct === 100 ? "#10B981" : "#EC5800" }} />
+                    </div>
+                  </div>
+
+                  {/* Tabela de alunos */}
+                  <table className="w-full">
+                    <thead className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
+                      <tr>
+                        {["Aluno", "Turma", "Tipo", "Status", "Ações"].map(h => (
+                          <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-[#6B7280] uppercase">{h}</th>
+                        ))}
                       </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
+                    </thead>
+                    <tbody className="divide-y divide-[#F3F4F6]">
+                      {ciclo.alunoIds.map((alunoId, i) => {
+                        const aluno = getAluno(alunoId);
+                        const relatorio = getRelatorio(alunoId);
+                        return (
+                          <tr key={alunoId} className="hover:bg-[#F9FAFB]">
+                            <td className="px-6 py-4 text-sm font-medium text-[#111827]">
+                              {aluno?.nome || ciclo.alunosNomes[i]}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-[#6B7280]">{aluno?.turma || ciclo.turma}</td>
+                            <td className="px-6 py-4 text-sm text-[#6B7280]">{aluno?.tipo || "—"}</td>
+                            <td className="px-6 py-4">
+                              <StatusBadge status={relatorio?.status || "not-started"} />
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                {relatorio && (
+                                  <button onClick={() => navigate("/report/view/" + relatorio.id)}
+                                    className="bg-[#070738] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                                    <Eye size={14} /> Ver
+                                  </button>
+                                )}
+                                <button onClick={() => navigate("/report/create/" + alunoId)}
+                                  className="bg-[#EC5800] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                                  <Plus size={14} /> {relatorio ? "Novo" : "Criar"}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </main>
     </div>
   );
