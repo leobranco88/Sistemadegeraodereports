@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Header } from "../components/Header";
-import { Copy, MessageCircle, Eye, Filter } from "lucide-react";
+import { Copy, MessageCircle, Eye, Filter, AlertTriangle, Clock, CheckCircle } from "lucide-react";
 import { db } from "../../firebase";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
 
@@ -12,38 +12,73 @@ interface Relatorio {
   period: string;
   situation: string;
   reportLink: string;
+  studentId: string;
+  status: string;
+}
+
+interface Ciclo {
+  id: string;
+  turma: string;
+  professorNome: string;
+  periodo: string;
+  deadline: string;
+  alunoIds: string[];
+  alunosNomes: string[];
 }
 
 export default function Dashboard() {
   const [relatorios, setRelatorios] = useState<Relatorio[]>([]);
+  const [ciclos, setCiclos] = useState<Ciclo[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [filtroTurma, setFiltroTurma] = useState("");
   const [filtroProfessor, setFiltroProfessor] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("");
 
   useEffect(() => {
-    const buscarRelatorios = async () => {
+    const buscarDados = async () => {
       try {
-        const q = query(collection(db, "reports"), orderBy("createdAt", "desc"));
-        const snapshot = await getDocs(q);
-        const dados = snapshot.docs.map(doc => ({
+        const [snapRelatorios, snapCiclos] = await Promise.all([
+          getDocs(query(collection(db, "reports"), orderBy("createdAt", "desc"))),
+          getDocs(collection(db, "ciclos")),
+        ]);
+        const dadosRelatorios = snapRelatorios.docs.map(doc => ({
           id: doc.id,
           studentName: doc.data().studentName || "",
           class: doc.data().class || "",
           professorName: doc.data().professorName || "",
           period: doc.data().period || "",
           situation: doc.data().situation || "",
+          studentId: doc.data().studentId || "",
+          status: doc.data().status || "",
           reportLink: `https://studentprogressreportdesign.vercel.app?reportId=${doc.id}`,
         }));
-        setRelatorios(dados);
+        setRelatorios(dadosRelatorios);
+        setCiclos(snapCiclos.docs.map(d => ({ id: d.id, ...d.data() })) as Ciclo[]);
       } catch (err) {
-        console.error("Erro ao buscar relatórios:", err);
+        console.error("Erro ao buscar dados:", err);
       } finally {
         setCarregando(false);
       }
     };
-    buscarRelatorios();
+    buscarDados();
   }, []);
+
+  const getProgressoCiclo = (ciclo: Ciclo) => {
+    const total = ciclo.alunoIds.length;
+    const feitos = relatorios.filter(r =>
+      ciclo.alunoIds.includes(r.studentId) && r.status === "published"
+    ).length;
+    return { feitos, total, pct: total > 0 ? Math.round((feitos / total) * 100) : 0 };
+  };
+
+  const getStatusDeadline = (deadline: string) => {
+    const hoje = new Date();
+    const prazo = new Date(deadline);
+    const diff = Math.ceil((prazo.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+    if (diff < 0) return { label: "Atrasado", bg: "#FEE2E2", color: "#DC2626", icon: <AlertTriangle size={14} /> };
+    if (diff <= 2) return { label: `${diff}d restantes`, bg: "#FEF3C7", color: "#92400E", icon: <Clock size={14} /> };
+    return { label: `${diff}d restantes`, bg: "#D1FAE5", color: "#065F46", icon: <CheckCircle size={14} /> };
+  };
 
   const relatoriosFiltrados = relatorios.filter((r) => {
     const matchTurma = !filtroTurma || r.class.toLowerCase().includes(filtroTurma.toLowerCase());
@@ -95,6 +130,58 @@ export default function Dashboard() {
     <div className="min-h-screen" style={{ backgroundColor: "#F0F4F8" }}>
       <Header />
       <div className="max-w-7xl mx-auto px-6 py-8">
+
+        {/* Painel de Ciclos */}
+        {ciclos.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-lg font-bold mb-4" style={{ color: "#573000" }}>Ciclos em Andamento</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {ciclos.map(ciclo => {
+                const { feitos, total, pct } = getProgressoCiclo(ciclo);
+                const prazo = getStatusDeadline(ciclo.deadline);
+                const concluido = feitos === total;
+                return (
+                  <div key={ciclo.id} className="bg-white rounded-lg shadow-md p-5">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <p className="font-bold text-sm" style={{ color: "#070738" }}>{ciclo.professorNome}</p>
+                        <p className="text-xs mt-0.5" style={{ color: "#6B7280" }}>{ciclo.turma} · {ciclo.periodo}</p>
+                      </div>
+                      <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium"
+                        style={{ backgroundColor: prazo.bg, color: prazo.color }}>
+                        {prazo.icon} {prazo.label}
+                      </span>
+                    </div>
+                    <div className="mb-3">
+                      <div className="flex justify-between text-xs mb-1">
+                        <span style={{ color: "#3D3D3D" }}>Publicados</span>
+                        <span className="font-medium" style={{ color: concluido ? "#065F46" : "#EC5800" }}>
+                          {feitos}/{total} ({pct}%)
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full" style={{ backgroundColor: "#F0F4F8" }}>
+                        <div className="h-1.5 rounded-full transition-all"
+                          style={{ width: `${pct}%`, backgroundColor: concluido ? "#10B981" : "#EC5800" }} />
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {ciclo.alunosNomes.map((nome, i) => {
+                        const rel = relatorios.find(r => r.studentId === ciclo.alunoIds[i]);
+                        const publicado = rel?.status === "published";
+                        return (
+                          <span key={i} className="px-2 py-0.5 rounded-full text-xs"
+                            style={{ backgroundColor: publicado ? "#D1FAE5" : "#F3F4F6", color: publicado ? "#065F46" : "#6B7280" }}>
+                            {publicado ? "✓" : "○"} {nome}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Filtros */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
