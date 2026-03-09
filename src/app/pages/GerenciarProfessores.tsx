@@ -45,7 +45,8 @@ export default function GerenciarProfessores() {
       const snapshot = await getDocs(q);
       const dados = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        turmas: doc.data().turmas || [],
       })) as Professor[];
       setProfessores(dados);
     } catch (err) {
@@ -67,7 +68,7 @@ export default function GerenciarProfessores() {
     setProfessorEditando(professor);
     setFormNome(professor.nome);
     setFormEmail(professor.email);
-    setFormTurmas(professor.turmas);
+    setFormTurmas(professor.turmas || []);
     setMostrarModal(true);
   };
 
@@ -156,7 +157,7 @@ export default function GerenciarProfessores() {
                       <td className="px-6 py-4" style={{ color: "#3D3D3D" }}>{professor.email}</td>
                       <td className="px-6 py-4">
                         <div className="flex flex-wrap gap-1">
-                          {professor.turmas.map((turma, idx) => (
+                          {(professor.turmas || []).map((turma, idx) => (
                             <span key={idx} className="px-2 py-1 rounded text-xs font-medium"
                               style={{ backgroundColor: "#EDE9FE", color: "#5B21B6" }}>
                               {turma}
@@ -199,7 +200,6 @@ export default function GerenciarProfessores() {
         </div>
       </div>
 
-      {/* Modal */}
       {mostrarModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
