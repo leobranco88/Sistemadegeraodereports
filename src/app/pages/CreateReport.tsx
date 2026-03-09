@@ -29,7 +29,9 @@ interface Aluno {
 
 export function CreateReport() {
   const { studentId } = useParams();
-  const navigate = useNavigate();
+const navigate = useNavigate();
+const location = useLocation();
+const periodFromUrl = new URLSearchParams(location.search).get("period");
   const [currentStep, setCurrentStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
