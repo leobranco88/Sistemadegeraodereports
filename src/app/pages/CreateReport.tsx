@@ -7,7 +7,7 @@ import { competencyTemplates } from "../data/mockData";
 import { Competency, ClassType, CEFRLevel, Situation } from "../types";
 import { ArrowLeft, ArrowRight, Save, Send } from "lucide-react";
 import { db, auth } from "../../firebase";
-import { collection, addDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, getDocs, getDoc, updateDoc, query, where, serverTimestamp, doc } from "firebase/firestore";
 
 const STEPS = ["Dados Gerais", "Dados Quantitativos", "Competências", "Observações Finais", "Revisão"];
 
@@ -28,12 +28,14 @@ interface Aluno {
 }
 
 export function CreateReport() {
-  const { studentId } = useParams();
-const navigate = useNavigate();
-const location = useLocation();
-const periodFromUrl = new URLSearchParams(location.search).get("period");
+  const { studentId, reportId } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const periodFromUrl = new URLSearchParams(location.search).get("period");
+
   const [currentStep, setCurrentStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [carregandoDraft, setCarregandoDraft] = useState(!!reportId);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [professorNome, setProfessorNome] = useState("Professor");
 
@@ -65,6 +67,7 @@ const periodFromUrl = new URLSearchParams(location.search).get("period");
   const [engagementHours, setEngagementHours] = useState("");
   const [observedHabits, setObservedHabits] = useState<string[]>([]);
 
+  // Carrega dados do professor e alunos
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (!user) { navigate("/"); return; }
@@ -84,11 +87,43 @@ const periodFromUrl = new URLSearchParams(location.search).get("period");
     return unsubscribe;
   }, [navigate]);
 
+  // Carrega rascunho se reportId existir
+  useEffect(() => {
+    if (!reportId) return;
+    const carregarDraft = async () => {
+      try {
+        const snap = await getDoc(doc(db, "reports", reportId));
+        if (snap.exists()) {
+          const d = snap.data();
+          if (d.studentId) setSelectedStudent(d.studentId);
+          if (d.classType) setClassType(d.classType);
+          if (d.period) setPeriod(d.period);
+          if (d.evaluation) setEvaluation(d.evaluation);
+          if (d.coordinator) setCoordinator(d.coordinator);
+          if (d.attendance !== undefined) setAttendance(d.attendance);
+          if (d.testScore !== undefined) setTestScore(d.testScore);
+          if (d.situation) setSituation(d.situation);
+          if (d.cefrLevel) setCefrLevel(d.cefrLevel);
+          if (d.competencies?.length) setCompetencies(d.competencies);
+          if (d.professorVoice) setProfessorVoice(d.professorVoice);
+          if (d.cycleFocus) setCycleFocus(d.cycleFocus);
+          if (d.technicalFocus) setTechnicalFocus(d.technicalFocus);
+          if (d.engagementHours) setEngagementHours(d.engagementHours);
+          if (d.observedHabits) setObservedHabits(d.observedHabits);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar rascunho:", err);
+      } finally {
+        setCarregandoDraft(false);
+      }
+    };
+    carregarDraft();
+  }, [reportId]);
+
   const student = alunos.find(a => a.id === selectedStudent);
 
   const buildReportData = (status: "draft" | "published") => ({
     status,
-    createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     studentId: selectedStudent,
     studentName: student?.nome || "",
@@ -138,8 +173,14 @@ const periodFromUrl = new URLSearchParams(location.search).get("period");
   const handleSaveDraft = async () => {
     setIsSaving(true);
     try {
-      const docRef = await addDoc(collection(db, "reports"), buildReportData("draft"));
-      alert(`Rascunho salvo! ID: ${docRef.id}`);
+      if (reportId) {
+        await updateDoc(doc(db, "reports", reportId), buildReportData("draft"));
+        alert("Rascunho atualizado!");
+      } else {
+        const docRef = await addDoc(collection(db, "reports"), { ...buildReportData("draft"), createdAt: serverTimestamp() });
+        alert(`Rascunho salvo! ID: ${docRef.id}`);
+        navigate("/report/create/" + selectedStudent + "/" + docRef.id + "?period=" + encodeURIComponent(period), { replace: true });
+      }
     } catch (err) {
       alert("Erro ao salvar rascunho. Tente novamente.");
     } finally {
@@ -151,8 +192,14 @@ const periodFromUrl = new URLSearchParams(location.search).get("period");
     if (!selectedStudent) { alert("Selecione um aluno antes de gerar o relatório."); return; }
     setIsSaving(true);
     try {
-      const docRef = await addDoc(collection(db, "reports"), buildReportData("published"));
-      alert(`Relatório gerado com sucesso!\nID: ${docRef.id}\n\nCompartilhe o link:\nhttps://studentprogressreportdesign.vercel.app?reportId=${docRef.id}`);
+      let finalId = reportId;
+      if (reportId) {
+        await updateDoc(doc(db, "reports", reportId), { ...buildReportData("published"), createdAt: serverTimestamp() });
+      } else {
+        const docRef = await addDoc(collection(db, "reports"), { ...buildReportData("published"), createdAt: serverTimestamp() });
+        finalId = docRef.id;
+      }
+      alert(`Relatório gerado com sucesso!\n\nCompartilhe o link:\nhttps://studentprogressreportdesign.vercel.app?reportId=${finalId}`);
       navigate("/professor");
     } catch (err) {
       alert("Erro ao gerar relatório. Tente novamente.");
@@ -165,22 +212,40 @@ const periodFromUrl = new URLSearchParams(location.search).get("period");
     setObservedHabits(prev => prev.includes(habit) ? prev.filter(h => h !== habit) : [...prev, habit]);
   };
 
+  if (carregandoDraft) {
+    return (
+      <div className="min-h-screen bg-[#F0F4F8] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-10 h-10 border-4 border-[#EC5800] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-[#6B7280]">Carregando rascunho...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F0F4F8]">
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
             <Logo />
-            <button onClick={() => navigate("/professor")}
-              className="flex items-center gap-2 text-[#9CA3AF] hover:text-[#EC5800] transition-colors">
-              <ArrowLeft className="w-5 h-5" /> Voltar ao Dashboard
-            </button>
+            <div className="flex items-center gap-4">
+              {reportId && (
+                <span className="px-3 py-1 rounded-full text-xs font-medium bg-[#FEF3C7] text-[#92400E]">
+                  Editando rascunho
+                </span>
+              )}
+              <button onClick={() => navigate("/professor")}
+                className="flex items-center gap-2 text-[#9CA3AF] hover:text-[#EC5800] transition-colors">
+                <ArrowLeft className="w-5 h-5" /> Voltar ao Dashboard
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl text-[#070738] mb-2">Criar Relatório</h1>
+        <h1 className="text-3xl text-[#070738] mb-2">{reportId ? "Continuar Rascunho" : "Criar Relatório"}</h1>
         <p className="text-[#9CA3AF] mb-8">
           {student ? `Aluno: ${student.nome}` : "Selecione um aluno para começar"}
         </p>
@@ -219,8 +284,8 @@ const periodFromUrl = new URLSearchParams(location.search).get("period");
                 <div>
                   <label className="block text-sm text-[#3D3D3D] mb-2">Período *</label>
                   <select value={period} onChange={(e) => setPeriod(e.target.value)}
-  disabled={!!periodFromUrl}
-  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800] disabled:bg-gray-100 disabled:cursor-not-allowed">
+                    disabled={!!periodFromUrl}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800] disabled:bg-gray-100 disabled:cursor-not-allowed">
                     <option value="Mid-Year Report · 2026">Mid-Year Report · 2026</option>
                     <option value="End-of-Year Report · 2026">End-of-Year Report · 2026</option>
                   </select>
