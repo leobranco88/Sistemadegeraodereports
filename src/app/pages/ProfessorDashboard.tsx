@@ -36,18 +36,15 @@ export function ProfessorDashboard() {
       setCurrentUser({ id: user.uid, name: user.displayName || user.email || "Professor", email: user.email || "", role: "professor" });
 
       try {
-        // Busca professor pelo email para pegar o ID do Firestore
         const profSnap = await getDocs(query(collection(db, "professores"), where("email", "==", user.email)));
         
         if (!profSnap.empty) {
           const professorId = profSnap.docs[0].id;
           
-          // Busca alunos vinculados a esse professor
           const alunosSnap = await getDocs(query(collection(db, "alunos"), where("professorId", "==", professorId), where("ativo", "==", true)));
           const alunosDados = alunosSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Aluno[];
           setAlunos(alunosDados);
 
-          // Busca relatórios desses alunos
           if (alunosDados.length > 0) {
             const relSnap = await getDocs(collection(db, "reports"));
             const relDados = relSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Relatorio[];
@@ -139,19 +136,22 @@ export function ProfessorDashboard() {
                         <td className="px-6 py-4 text-sm font-medium text-[#111827]">{aluno.nome}</td>
                         <td className="px-6 py-4 text-sm text-[#6B7280]">{aluno.turma}</td>
                         <td className="px-6 py-4 text-sm text-[#6B7280]">{aluno.tipo}</td>
-                        <td className="px-6 py-4"><StatusBadge status={relatorio?.status || "not-started"} /></td>
                         <td className="px-6 py-4">
-                          {relatorio ? (
-                            <button onClick={() => navigate("/report/view/" + relatorio.id)}
-                              className="bg-[#070738] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                              <Eye size={14} /> Ver
-                            </button>
-                          ) : (
+                          <StatusBadge status={relatorio?.status || "not-started"} />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            {relatorio && (
+                              <button onClick={() => navigate("/report/view/" + relatorio.id)}
+                                className="bg-[#070738] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                                <Eye size={14} /> Ver
+                              </button>
+                            )}
                             <button onClick={() => navigate("/report/create/" + aluno.id)}
                               className="bg-[#EC5800] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                              <Plus size={14} /> Criar
+                              <Plus size={14} /> {relatorio ? "Novo" : "Criar"}
                             </button>
-                          )}
+                          </div>
                         </td>
                       </tr>
                     );
