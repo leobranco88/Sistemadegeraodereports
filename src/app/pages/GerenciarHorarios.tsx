@@ -199,7 +199,7 @@ export default function GerenciarHorarios() {
                 <select value={professorSelecionado} onChange={(e) => setProfessorSelecionado(e.target.value)}
                   className="w-full px-4 py-2 border rounded-lg focus:outline-none" style={{ borderColor: "#E5E7EB" }} required>
                   <option value="">Selecione um professor...</option>
-                  {professores.filter(p => p.ativo).map(p => (
+                  {professores.filter(p => p.ativo !== false).map(p => (
                     <option key={p.id} value={p.id}>{p.nome}</option>
                   ))}
                 </select>
