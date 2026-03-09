@@ -65,10 +65,12 @@ export default function Dashboard() {
 
   const getProgressoCiclo = (ciclo: Ciclo) => {
     const total = ciclo.alunoIds.length;
-    const feitos = relatorios.filter(r =>
-      ciclo.alunoIds.includes(r.studentId) && r.status === "published" && r.period === ciclo.periodo
+    const feitos = ciclo.alunoIds.filter(alunoId =>
+      relatorios.some(r =>
+        r.studentId === alunoId && r.status === "published" && r.period === ciclo.periodo
+      )
     ).length;
-    return { feitos, total, pct: total > 0 ? Math.round((feitos / total) * 100) : 0 };
+    return { feitos, total, pct: total > 0 ? Math.min(Math.round((feitos / total) * 100), 100) : 0 };
   };
 
   const getStatusDeadline = (deadline: string) => {
