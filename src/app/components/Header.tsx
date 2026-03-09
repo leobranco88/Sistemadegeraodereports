@@ -45,3 +45,24 @@ export function Header() {
           <button
             onClick={() => navigate("/secretaria/horarios")}
             className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+            style={{
+              color: location.pathname === "/secretaria/horarios" ? "#EC5800" : "#3D3D3D",
+              backgroundColor: location.pathname === "/secretaria/horarios" ? "#FEF2F2" : "transparent"
+            }}
+          >
+            <Calendar size={20} />
+            <span>Horários</span>
+          </button>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors"
+            style={{ color: "#EC5800", backgroundColor: "#FEF2F2" }}
+          >
+            <LogOut size={20} />
+            <span>Sair</span>
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}
