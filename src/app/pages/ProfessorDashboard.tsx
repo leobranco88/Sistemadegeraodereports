@@ -76,8 +76,7 @@ export function ProfessorDashboard() {
     navigate("/");
   };
 
-  const getRelatorio = (alunoId: string) => relatorios.find(r => r.studentId === alunoId);
-
+ const getRelatorio = (alunoId: string, periodo: string) => relatorios.find(r => r.studentId === alunoId && r.period === periodo);
   const getAluno = (alunoId: string) => alunos.find(a => a.id === alunoId);
 
   const getStatusDeadline = (deadline: string) => {
