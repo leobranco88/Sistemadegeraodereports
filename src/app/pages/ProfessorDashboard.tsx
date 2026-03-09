@@ -5,19 +5,23 @@ import { StatusBadge } from "../components/StatusBadge";
 import { mockStudents, mockReports } from "../data/mockData";
 import { User } from "../types";
 import { Users, FileText, Clock, CheckCircle, Plus, Eye, LogOut } from "lucide-react";
+import { auth } from "../../firebase";
+import { signOut } from "firebase/auth";
 
 export function ProfessorDashboard() {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem("currentUser");
-    if (!saved) { navigate("/"); return; }
-    setCurrentUser(JSON.parse(saved));
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (!user) { navigate("/"); return; }
+      setCurrentUser({ id: user.uid, name: user.displayName || user.email || "Professor", email: user.email || "", role: "professor" });
+    });
+    return unsubscribe;
   }, [navigate]);
 
-  const handleSignOut = () => {
-    localStorage.removeItem("currentUser");
+  const handleSignOut = async () => {
+    await signOut(auth);
     navigate("/");
   };
 
@@ -72,29 +76,37 @@ export function ProfessorDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#F3F4F6]">
-              {mockStudents.map(student => {
-                const report = getReport(student.id);
-                return (
-                  <tr key={student.id} className="hover:bg-[#F9FAFB]">
-                    <td className="px-6 py-4 text-sm font-medium text-[#111827]">{student.name}</td>
-                    <td className="px-6 py-4 text-sm text-[#6B7280]">{student.class}</td>
-                    <td className="px-6 py-4"><StatusBadge status={report?.status || "not-started"} /></td>
-                    <td className="px-6 py-4">
-                      {report ? (
-                        <button onClick={() => navigate("/report/view/" + report.id)}
-                          className="bg-[#070738] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                          <Eye size={14} /> Ver
-                        </button>
-                      ) : (
-                        <button onClick={() => navigate("/report/create/" + student.id)}
-                          className="bg-[#EC5800] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                          <Plus size={14} /> Criar
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+              {mockStudents.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-6 py-12 text-center text-[#6B7280]">
+                    Nenhum aluno cadastrado ainda.
+                  </td>
+                </tr>
+              ) : (
+                mockStudents.map(student => {
+                  const report = getReport(student.id);
+                  return (
+                    <tr key={student.id} className="hover:bg-[#F9FAFB]">
+                      <td className="px-6 py-4 text-sm font-medium text-[#111827]">{student.name}</td>
+                      <td className="px-6 py-4 text-sm text-[#6B7280]">{student.class}</td>
+                      <td className="px-6 py-4"><StatusBadge status={report?.status || "not-started"} /></td>
+                      <td className="px-6 py-4">
+                        {report ? (
+                          <button onClick={() => navigate("/report/view/" + report.id)}
+                            className="bg-[#070738] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                            <Eye size={14} /> Ver
+                          </button>
+                        ) : (
+                          <button onClick={() => navigate("/report/create/" + student.id)}
+                            className="bg-[#EC5800] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                            <Plus size={14} /> Criar
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
