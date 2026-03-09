@@ -221,12 +221,16 @@ export function ProfessorDashboard() {
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-2">
+
+                                {/* Publicado: só Ver */}
                                 {isPublished && (
                                   <button onClick={() => navigate("/report/view/" + relatorio!.id)}
                                     className="bg-[#070738] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
                                     <Eye size={14} /> Ver
                                   </button>
                                 )}
+
+                                {/* Rascunho: Continuar + Excluir */}
                                 {isDraft && (
                                   <>
                                     <button onClick={() => navigate("/report/create/" + alunoId + "/" + relatorio!.id + "?period=" + encodeURIComponent(ciclo.periodo))}
@@ -239,12 +243,15 @@ export function ProfessorDashboard() {
                                     </button>
                                   </>
                                 )}
-                                {!isDraft && (
+
+                                {/* Sem relatório: Criar */}
+                                {!isDraft && !isPublished && (
                                   <button onClick={() => navigate("/report/create/" + alunoId + "?period=" + encodeURIComponent(ciclo.periodo))}
                                     className="bg-[#EC5800] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                                    <Plus size={14} /> {isPublished ? "Novo" : "Criar"}
+                                    <Plus size={14} /> Criar
                                   </button>
                                 )}
+
                               </div>
                             </td>
                           </tr>
