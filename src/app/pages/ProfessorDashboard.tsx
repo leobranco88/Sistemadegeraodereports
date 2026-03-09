@@ -31,6 +31,7 @@ interface Relatorio {
   id: string;
   studentId: string;
   status: string;
+  period: string;
 }
 
 export function ProfessorDashboard() {
@@ -76,7 +77,9 @@ export function ProfessorDashboard() {
     navigate("/");
   };
 
- const getRelatorio = (alunoId: string, periodo: string) => relatorios.find(r => r.studentId === alunoId && r.period === periodo);
+  const getRelatorio = (alunoId: string, periodo: string) =>
+    relatorios.find(r => r.studentId === alunoId && r.period === periodo);
+
   const getAluno = (alunoId: string) => alunos.find(a => a.id === alunoId);
 
   const getStatusDeadline = (deadline: string) => {
@@ -96,7 +99,7 @@ export function ProfessorDashboard() {
 
   const totalRelatorios = ciclos.reduce((acc, c) => acc + c.alunoIds.length, 0);
   const totalPublicados = ciclos.reduce((acc, c) =>
-    acc + c.alunoIds.filter(id => getRelatorio(id)?.status === "published").length, 0);
+    acc + c.alunoIds.filter(id => getRelatorio(id, c.periodo)?.status === "published").length, 0);
   const totalAtrasados = ciclos.filter(c => new Date(c.deadline) < new Date()).length;
 
   return (
@@ -117,7 +120,6 @@ export function ProfessorDashboard() {
       <main className="max-w-6xl mx-auto px-6 py-8">
         <h1 className="text-2xl font-bold text-[#070738] mb-6">Dashboard do Professor</h1>
 
-        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
           {[
             { label: "Relatórios pendentes", value: totalRelatorios - totalPublicados, icon: FileText },
@@ -134,7 +136,6 @@ export function ProfessorDashboard() {
           ))}
         </div>
 
-        {/* Ciclos */}
         {carregando ? (
           <div className="text-center py-12">
             <div className="w-10 h-10 border-4 border-[#EC5800] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -150,12 +151,11 @@ export function ProfessorDashboard() {
           <div className="space-y-6">
             {ciclos.map(ciclo => {
               const prazo = getStatusDeadline(ciclo.deadline);
-              const publicados = ciclo.alunoIds.filter(id => getRelatorio(id)?.status === "published").length;
+              const publicados = ciclo.alunoIds.filter(id => getRelatorio(id, ciclo.periodo)?.status === "published").length;
               const pct = ciclo.alunoIds.length > 0 ? Math.round((publicados / ciclo.alunoIds.length) * 100) : 0;
 
               return (
                 <div key={ciclo.id} className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
-                  {/* Cabeçalho do ciclo */}
                   <div className="px-6 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
                     <div>
                       <h2 className="font-bold text-[#070738]">{ciclo.turma} — {ciclo.periodo}</h2>
@@ -177,7 +177,6 @@ export function ProfessorDashboard() {
                     </div>
                   </div>
 
-                  {/* Barra de progresso */}
                   <div className="px-6 py-2 bg-[#F9FAFB]">
                     <div className="w-full h-1.5 rounded-full bg-[#E5E7EB]">
                       <div className="h-1.5 rounded-full transition-all"
@@ -185,7 +184,6 @@ export function ProfessorDashboard() {
                     </div>
                   </div>
 
-                  {/* Tabela de alunos */}
                   <table className="w-full">
                     <thead className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
                       <tr>
@@ -193,46 +191,3 @@ export function ProfessorDashboard() {
                           <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-[#6B7280] uppercase">{h}</th>
                         ))}
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#F3F4F6]">
-                      {ciclo.alunoIds.map((alunoId, i) => {
-                        const aluno = getAluno(alunoId);
-                        const relatorio = getRelatorio(alunoId);
-                        return (
-                          <tr key={alunoId} className="hover:bg-[#F9FAFB]">
-                            <td className="px-6 py-4 text-sm font-medium text-[#111827]">
-                              {aluno?.nome || ciclo.alunosNomes[i]}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-[#6B7280]">{aluno?.turma || ciclo.turma}</td>
-                            <td className="px-6 py-4 text-sm text-[#6B7280]">{aluno?.tipo || "—"}</td>
-                            <td className="px-6 py-4">
-                              <StatusBadge status={relatorio?.status || "not-started"} />
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-2">
-                                {relatorio && (
-                                  <button onClick={() => navigate("/report/view/" + relatorio.id)}
-                                    className="bg-[#070738] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                                    <Eye size={14} /> Ver
-                                  </button>
-                                )}
-                                <button onClick={() => navigate("/report/create/" + alunoId)}
-                                  className="bg-[#EC5800] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                                  <Plus size={14} /> {relatorio ? "Novo" : "Criar"}
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </main>
-    </div>
-  );
-}
