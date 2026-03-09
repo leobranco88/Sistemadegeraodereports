@@ -39,7 +39,7 @@ export function CreateReport() {
   const [classType, setClassType] = useState<ClassType>("regular");
   const [period, setPeriod] = useState("Mid-Year Report · 2026");
   const [evaluation, setEvaluation] = useState<"1 de 2 ciclos" | "2 de 2 ciclos">("1 de 2 ciclos");
-  const [coordinator, setCoordinator] = useState("João Santos");
+  const [coordinator, setCoordinator] = useState("Leonardo Branco Costa");
 
   const [attendance, setAttendance] = useState(85);
   const [testScore, setTestScore] = useState(75);
@@ -234,8 +234,8 @@ export function CreateReport() {
                   <label className="block text-sm text-[#3D3D3D] mb-2">Coordenador *</label>
                   <select value={coordinator} onChange={(e) => setCoordinator(e.target.value)}
                     className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800]">
-                    <option value="João Santos">João Santos</option>
-                    <option value="Maria Oliveira">Maria Oliveira</option>
+                    <option value="Leonardo Branco Costa">Leonardo Branco Costa</option>
+                    <option value="Maria Eduarda Camano">Maria Eduarda Camano</option>
                   </select>
                 </div>
               </div>
