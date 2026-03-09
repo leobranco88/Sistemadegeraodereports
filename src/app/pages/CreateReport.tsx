@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Logo } from "../components/Logo";
 import { Stepper } from "../components/Stepper";
 import { RatingStars } from "../components/RatingStars";
-import { mockStudents, competencyTemplates } from "../data/mockData";
+import { competencyTemplates } from "../data/mockData";
 import { Competency, ClassType, CEFRLevel, Situation } from "../types";
 import { ArrowLeft, ArrowRight, Save, Send } from "lucide-react";
-import { db } from "../../firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { db, auth } from "../../firebase";
+import { collection, addDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
 
 const STEPS = ["Dados Gerais", "Dados Quantitativos", "Competências", "Observações Finais", "Revisão"];
 
@@ -20,26 +20,32 @@ const COMPETENCIES = [
   "Leitura e Escrita",
 ];
 
+interface Aluno {
+  id: string;
+  nome: string;
+  turma: string;
+  tipo: string;
+}
+
 export function CreateReport() {
   const { studentId } = useParams();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [alunos, setAlunos] = useState<Aluno[]>([]);
+  const [professorNome, setProfessorNome] = useState("Professor");
 
-  // Step 1: General Data
   const [selectedStudent, setSelectedStudent] = useState(studentId || "");
   const [classType, setClassType] = useState<ClassType>("regular");
   const [period, setPeriod] = useState("Mid-Year Report · 2026");
   const [evaluation, setEvaluation] = useState<"1 de 2 ciclos" | "2 de 2 ciclos">("1 de 2 ciclos");
   const [coordinator, setCoordinator] = useState("João Santos");
 
-  // Step 2: Quantitative Data
   const [attendance, setAttendance] = useState(85);
   const [testScore, setTestScore] = useState(75);
   const [situation, setSituation] = useState<Situation>("approved");
   const [cefrLevel, setCefrLevel] = useState<CEFRLevel>("B1");
 
-  // Step 3: Competencies
   const [competencies, setCompetencies] = useState<Competency[]>(
     COMPETENCIES.map((name, index) => ({
       id: String(index + 1),
@@ -51,22 +57,40 @@ export function CreateReport() {
     }))
   );
 
-  // Step 4: Final Observations
   const [professorVoice, setProfessorVoice] = useState("");
   const [cycleFocus, setCycleFocus] = useState("");
   const [technicalFocus, setTechnicalFocus] = useState("");
   const [engagementHours, setEngagementHours] = useState("");
   const [observedHabits, setObservedHabits] = useState<string[]>([]);
 
-  const student = mockStudents.find(s => s.id === selectedStudent);
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (!user) { navigate("/"); return; }
+      try {
+        const profSnap = await getDocs(query(collection(db, "professores"), where("email", "==", user.email)));
+        if (!profSnap.empty) {
+          const profDoc = profSnap.docs[0];
+          const professorId = profDoc.id;
+          setProfessorNome(profDoc.data().nome || user.email || "Professor");
+          const alunosSnap = await getDocs(query(collection(db, "alunos"), where("professorId", "==", professorId), where("ativo", "==", true)));
+          setAlunos(alunosSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Aluno[]);
+        }
+      } catch (err) {
+        console.error("Erro ao buscar dados:", err);
+      }
+    });
+    return unsubscribe;
+  }, [navigate]);
+
+  const student = alunos.find(a => a.id === selectedStudent);
 
   const buildReportData = (status: "draft" | "published") => ({
     status,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     studentId: selectedStudent,
-    studentName: student?.name || "",
-    class: student?.class || "",
+    studentName: student?.nome || "",
+    class: student?.turma || "",
     classType,
     period,
     evaluation,
@@ -81,7 +105,7 @@ export function CreateReport() {
     technicalFocus,
     engagementHours,
     observedHabits,
-    professorName: "Professor", // TODO: pegar do auth
+    professorName: professorNome,
   });
 
   const updateCompetencyRating = (index: number, rating: number) => {
@@ -102,17 +126,11 @@ export function CreateReport() {
   };
 
   const handleNext = () => {
-    if (currentStep < STEPS.length - 1) {
-      setCurrentStep(currentStep + 1);
-      window.scrollTo(0, 0);
-    }
+    if (currentStep < STEPS.length - 1) { setCurrentStep(currentStep + 1); window.scrollTo(0, 0); }
   };
 
   const handlePrev = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-      window.scrollTo(0, 0);
-    }
+    if (currentStep > 0) { setCurrentStep(currentStep - 1); window.scrollTo(0, 0); }
   };
 
   const handleSaveDraft = async () => {
@@ -121,7 +139,6 @@ export function CreateReport() {
       const docRef = await addDoc(collection(db, "reports"), buildReportData("draft"));
       alert(`Rascunho salvo! ID: ${docRef.id}`);
     } catch (err) {
-      console.error(err);
       alert("Erro ao salvar rascunho. Tente novamente.");
     } finally {
       setIsSaving(false);
@@ -129,17 +146,13 @@ export function CreateReport() {
   };
 
   const handleSubmit = async () => {
-    if (!selectedStudent) {
-      alert("Selecione um aluno antes de gerar o relatório.");
-      return;
-    }
+    if (!selectedStudent) { alert("Selecione um aluno antes de gerar o relatório."); return; }
     setIsSaving(true);
     try {
       const docRef = await addDoc(collection(db, "reports"), buildReportData("published"));
       alert(`Relatório gerado com sucesso!\nID: ${docRef.id}\n\nCompartilhe o link:\nhttps://studentprogressreportdesign.vercel.app?reportId=${docRef.id}`);
       navigate("/professor");
     } catch (err) {
-      console.error(err);
       alert("Erro ao gerar relatório. Tente novamente.");
     } finally {
       setIsSaving(false);
@@ -147,26 +160,18 @@ export function CreateReport() {
   };
 
   const toggleHabit = (habit: string) => {
-    if (observedHabits.includes(habit)) {
-      setObservedHabits(observedHabits.filter(h => h !== habit));
-    } else {
-      setObservedHabits([...observedHabits, habit]);
-    }
+    setObservedHabits(prev => prev.includes(habit) ? prev.filter(h => h !== habit) : [...prev, habit]);
   };
 
   return (
     <div className="min-h-screen bg-[#F0F4F8]">
-      {/* Header */}
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
             <Logo />
-            <button
-              onClick={() => navigate("/professor")}
-              className="flex items-center gap-2 text-[#9CA3AF] hover:text-[#EC5800] transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Voltar ao Dashboard
+            <button onClick={() => navigate("/professor")}
+              className="flex items-center gap-2 text-[#9CA3AF] hover:text-[#EC5800] transition-colors">
+              <ArrowLeft className="w-5 h-5" /> Voltar ao Dashboard
             </button>
           </div>
         </div>
@@ -175,46 +180,35 @@ export function CreateReport() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h1 className="text-3xl text-[#070738] mb-2">Criar Relatório</h1>
         <p className="text-[#9CA3AF] mb-8">
-          {student ? `Aluno: ${student.name}` : "Selecione um aluno para começar"}
+          {student ? `Aluno: ${student.nome}` : "Selecione um aluno para começar"}
         </p>
 
         <Stepper steps={STEPS} currentStep={currentStep} />
 
         <div className="bg-white rounded-xl shadow-sm p-8 mb-6">
-          {/* Step 1: General Data */}
           {currentStep === 0 && (
             <div className="space-y-6">
               <h2 className="text-2xl text-[#070738] mb-6">Dados Gerais</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm text-[#3D3D3D] mb-2">Aluno *</label>
-                  <select
-                    value={selectedStudent}
-                    onChange={(e) => setSelectedStudent(e.target.value)}
-                    className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800]"
-                  >
+                  <select value={selectedStudent} onChange={(e) => setSelectedStudent(e.target.value)}
+                    className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800]">
                     <option value="">Selecione um aluno</option>
-                    {mockStudents.map(s => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
+                    {alunos.map(a => (
+                      <option key={a.id} value={a.id}>{a.nome}</option>
                     ))}
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm text-[#3D3D3D] mb-2">Turma</label>
-                  <input
-                    type="text"
-                    value={student?.class || ""}
-                    disabled
-                    className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg"
-                  />
+                  <input type="text" value={student?.turma || ""} disabled
+                    className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg" />
                 </div>
                 <div>
                   <label className="block text-sm text-[#3D3D3D] mb-2">Tipo de turma *</label>
-                  <select
-                    value={classType}
-                    onChange={(e) => setClassType(e.target.value as ClassType)}
-                    className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800]"
-                  >
+                  <select value={classType} onChange={(e) => setClassType(e.target.value as ClassType)}
+                    className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800]">
                     <option value="regular">Regular</option>
                     <option value="intensive">Intensivo</option>
                     <option value="private">Particular</option>
@@ -222,33 +216,24 @@ export function CreateReport() {
                 </div>
                 <div>
                   <label className="block text-sm text-[#3D3D3D] mb-2">Período *</label>
-                  <select
-                    value={period}
-                    onChange={(e) => setPeriod(e.target.value)}
-                    className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800]"
-                  >
+                  <select value={period} onChange={(e) => setPeriod(e.target.value)}
+                    className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800]">
                     <option value="Mid-Year Report · 2026">Mid-Year Report · 2026</option>
                     <option value="End-of-Year Report · 2026">End-of-Year Report · 2026</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm text-[#3D3D3D] mb-2">Avaliação *</label>
-                  <select
-                    value={evaluation}
-                    onChange={(e) => setEvaluation(e.target.value as "1 de 2 ciclos" | "2 de 2 ciclos")}
-                    className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800]"
-                  >
+                  <select value={evaluation} onChange={(e) => setEvaluation(e.target.value as "1 de 2 ciclos" | "2 de 2 ciclos")}
+                    className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800]">
                     <option value="1 de 2 ciclos">1 de 2 ciclos</option>
                     <option value="2 de 2 ciclos">2 de 2 ciclos</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm text-[#3D3D3D] mb-2">Coordenador *</label>
-                  <select
-                    value={coordinator}
-                    onChange={(e) => setCoordinator(e.target.value)}
-                    className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800]"
-                  >
+                  <select value={coordinator} onChange={(e) => setCoordinator(e.target.value)}
+                    className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800]">
                     <option value="João Santos">João Santos</option>
                     <option value="Maria Oliveira">Maria Oliveira</option>
                   </select>
@@ -257,7 +242,6 @@ export function CreateReport() {
             </div>
           )}
 
-          {/* Step 2: Quantitative Data */}
           {currentStep === 1 && (
             <div className="space-y-6">
               <h2 className="text-2xl text-[#070738] mb-6">Dados Quantitativos</h2>
@@ -297,7 +281,6 @@ export function CreateReport() {
             </div>
           )}
 
-          {/* Step 3: Competencies */}
           {currentStep === 2 && (
             <div className="space-y-8">
               <h2 className="text-2xl text-[#070738] mb-6">Avaliação por Competências</h2>
@@ -340,7 +323,6 @@ export function CreateReport() {
             </div>
           )}
 
-          {/* Step 4: Final Observations */}
           {currentStep === 3 && (
             <div className="space-y-6">
               <h2 className="text-2xl text-[#070738] mb-6">Observações Finais</h2>
@@ -401,17 +383,16 @@ export function CreateReport() {
             </div>
           )}
 
-          {/* Step 5: Review */}
           {currentStep === 4 && (
             <div className="space-y-6">
               <h2 className="text-2xl text-[#070738] mb-6">Revisão Final</h2>
               <div className="bg-[#F0F4F8] rounded-lg p-6 space-y-4">
                 <div>
                   <p className="text-sm text-[#9CA3AF]">Aluno</p>
-                  <p className="text-[#070738]">{student?.name}</p>
+                  <p className="text-[#070738]">{student?.nome}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div><p className="text-sm text-[#9CA3AF]">Turma</p><p className="text-[#070738]">{student?.class}</p></div>
+                  <div><p className="text-sm text-[#9CA3AF]">Turma</p><p className="text-[#070738]">{student?.turma}</p></div>
                   <div><p className="text-sm text-[#9CA3AF]">Período</p><p className="text-[#070738]">{period}</p></div>
                   <div><p className="text-sm text-[#9CA3AF]">Frequência</p><p className="text-[#070738]">{attendance}%</p></div>
                   <div><p className="text-sm text-[#9CA3AF]">Nota do teste</p><p className="text-[#070738]">{testScore}%</p></div>
@@ -432,20 +413,16 @@ export function CreateReport() {
           )}
         </div>
 
-        {/* Navigation Buttons */}
         <div className="flex justify-between items-center">
           <button onClick={handlePrev} disabled={currentStep === 0}
             className="flex items-center gap-2 px-6 py-3 border border-gray-300 text-[#3D3D3D] rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-            <ArrowLeft className="w-5 h-5" />
-            Anterior
+            <ArrowLeft className="w-5 h-5" /> Anterior
           </button>
-
           <button onClick={handleSaveDraft} disabled={isSaving}
             className="flex items-center gap-2 px-6 py-3 border border-[#EC5800] text-[#EC5800] rounded-lg hover:bg-[#EC5800] hover:text-white transition-colors disabled:opacity-50">
             <Save className="w-5 h-5" />
             {isSaving ? "Salvando..." : "Salvar Rascunho"}
           </button>
-
           {currentStep === STEPS.length - 1 ? (
             <button onClick={handleSubmit} disabled={isSaving}
               className="flex items-center gap-2 px-6 py-3 bg-[#16A34A] text-white rounded-lg hover:bg-[#15803d] transition-colors disabled:opacity-50">
@@ -455,8 +432,7 @@ export function CreateReport() {
           ) : (
             <button onClick={handleNext}
               className="flex items-center gap-2 px-6 py-3 bg-[#EC5800] text-white rounded-lg hover:bg-[#d84f00] transition-colors">
-              Próximo
-              <ArrowRight className="w-5 h-5" />
+              Próximo <ArrowRight className="w-5 h-5" />
             </button>
           )}
         </div>
