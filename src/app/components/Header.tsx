@@ -25,4 +25,15 @@ export function Header() {
           ].map(({ path, label, icon }) => (
             <button key={path} onClick={() => navigate(path)}
               className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-gray-100 transition-colors"
-              style={{ color: location.pathname === path ? "#EC5800" : "#3
+              style={{ color: location.pathname === path ? "#EC5800" : "#3D3D3D", backgroundColor: location.pathname === path ? "#FEF2F2" : "transparent" }}>
+              {icon}<span>{label}</span>
+            </button>
+          ))}
+          <button onClick={handleLogout} className="flex items-center gap-2 px-4 py-2 rounded-lg" style={{ color: "#EC5800", backgroundColor: "#FEF2F2" }}>
+            <LogOut size={20} /><span>Sair</span>
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}
