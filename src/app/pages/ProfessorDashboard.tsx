@@ -214,7 +214,7 @@ export function ProfessorDashboard() {
                                     <Eye size={14} /> Ver
                                   </button>
                                 )}
-                                <button onClick={() => navigate("/report/create/" + alunoId)}
+                                <button onClick={() => navigate("/report/create/" + alunoId + "?period=" + encodeURIComponent(ciclo.periodo))}
                                   className="bg-[#EC5800] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
                                   <Plus size={14} /> {relatorio ? "Novo" : "Criar"}
                                 </button>
