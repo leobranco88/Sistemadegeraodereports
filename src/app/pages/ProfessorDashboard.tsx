@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { Logo } from "../components/Logo";
 import { StatusBadge } from "../components/StatusBadge";
 import { User } from "../types";
-import { FileText, Clock, CheckCircle, Plus, Eye, LogOut, AlertTriangle, Calendar } from "lucide-react";
+import { FileText, Clock, CheckCircle, Plus, Eye, LogOut, AlertTriangle, Calendar, Pencil, Trash2 } from "lucide-react";
 import { auth, db } from "../../firebase";
 import { signOut } from "firebase/auth";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs, query, where, deleteDoc, doc } from "firebase/firestore";
 
 interface Ciclo {
   id: string;
@@ -75,6 +75,16 @@ export function ProfessorDashboard() {
   const handleSignOut = async () => {
     await signOut(auth);
     navigate("/");
+  };
+
+  const handleExcluirDraft = async (relatorioId: string) => {
+    if (!confirm("Excluir este rascunho?")) return;
+    try {
+      await deleteDoc(doc(db, "reports", relatorioId));
+      setRelatorios(prev => prev.filter(r => r.id !== relatorioId));
+    } catch (err) {
+      alert("Erro ao excluir rascunho.");
+    }
   };
 
   const getRelatorio = (alunoId: string, periodo: string) =>
@@ -196,6 +206,9 @@ export function ProfessorDashboard() {
                       {ciclo.alunoIds.map((alunoId, i) => {
                         const aluno = getAluno(alunoId);
                         const relatorio = getRelatorio(alunoId, ciclo.periodo);
+                        const isDraft = relatorio?.status === "draft";
+                        const isPublished = relatorio?.status === "published";
+
                         return (
                           <tr key={alunoId} className="hover:bg-[#F9FAFB]">
                             <td className="px-6 py-4 text-sm font-medium text-[#111827]">
@@ -208,16 +221,30 @@ export function ProfessorDashboard() {
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-2">
-                                {relatorio && (
-                                  <button onClick={() => navigate("/report/view/" + relatorio.id)}
+                                {isPublished && (
+                                  <button onClick={() => navigate("/report/view/" + relatorio!.id)}
                                     className="bg-[#070738] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
                                     <Eye size={14} /> Ver
                                   </button>
                                 )}
-                                <button onClick={() => navigate("/report/create/" + alunoId + "?period=" + encodeURIComponent(ciclo.periodo))}
-                                  className="bg-[#EC5800] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                                  <Plus size={14} /> {relatorio ? "Novo" : "Criar"}
-                                </button>
+                                {isDraft && (
+                                  <>
+                                    <button onClick={() => navigate("/report/create/" + alunoId + "/" + relatorio!.id + "?period=" + encodeURIComponent(ciclo.periodo))}
+                                      className="bg-[#F59E0B] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                                      <Pencil size={14} /> Continuar
+                                    </button>
+                                    <button onClick={() => handleExcluirDraft(relatorio!.id)}
+                                      className="bg-[#FEE2E2] text-[#DC2626] px-3 py-2 rounded-lg text-sm flex items-center gap-2 hover:bg-[#DC2626] hover:text-white transition-colors">
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </>
+                                )}
+                                {!isDraft && (
+                                  <button onClick={() => navigate("/report/create/" + alunoId + "?period=" + encodeURIComponent(ciclo.periodo))}
+                                    className="bg-[#EC5800] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                                    <Plus size={14} /> {isPublished ? "Novo" : "Criar"}
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
