@@ -191,3 +191,46 @@ export function ProfessorDashboard() {
                           <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-[#6B7280] uppercase">{h}</th>
                         ))}
                       </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F3F4F6]">
+                      {ciclo.alunoIds.map((alunoId, i) => {
+                        const aluno = getAluno(alunoId);
+                        const relatorio = getRelatorio(alunoId, ciclo.periodo);
+                        return (
+                          <tr key={alunoId} className="hover:bg-[#F9FAFB]">
+                            <td className="px-6 py-4 text-sm font-medium text-[#111827]">
+                              {aluno?.nome || ciclo.alunosNomes[i]}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-[#6B7280]">{aluno?.turma || ciclo.turma}</td>
+                            <td className="px-6 py-4 text-sm text-[#6B7280]">{aluno?.tipo || "—"}</td>
+                            <td className="px-6 py-4">
+                              <StatusBadge status={relatorio?.status || "not-started"} />
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                {relatorio && (
+                                  <button onClick={() => navigate("/report/view/" + relatorio.id)}
+                                    className="bg-[#070738] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                                    <Eye size={14} /> Ver
+                                  </button>
+                                )}
+                                <button onClick={() => navigate("/report/create/" + alunoId)}
+                                  className="bg-[#EC5800] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                                  <Plus size={14} /> {relatorio ? "Novo" : "Criar"}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
