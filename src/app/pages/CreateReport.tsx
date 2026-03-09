@@ -219,7 +219,8 @@ const periodFromUrl = new URLSearchParams(location.search).get("period");
                 <div>
                   <label className="block text-sm text-[#3D3D3D] mb-2">Período *</label>
                   <select value={period} onChange={(e) => setPeriod(e.target.value)}
-                    className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800]">
+  disabled={!!periodFromUrl}
+  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800] disabled:bg-gray-100 disabled:cursor-not-allowed">
                     <option value="Mid-Year Report · 2026">Mid-Year Report · 2026</option>
                     <option value="End-of-Year Report · 2026">End-of-Year Report · 2026</option>
                   </select>
