@@ -19,4 +19,10 @@ export const router = createBrowserRouter([
   { path: "/report/create/:studentId?", Component: CreateReport },
   { path: "/report/view/:reportId", Component: ViewReport },
   { path: "/confirm/:reportId", Component: ParentConfirmation },
-  { path
+  { path: "/secretaria", Component: SecretariaDashboard },
+  { path: "/secretaria/professores", Component: GerenciarProfessores },
+  { path: "/secretaria/alunos", Component: GerenciarAlunos },
+  { path: "/secretaria/horarios", Component: GerenciarHorarios },
+  { path: "/secretaria/ciclos", Component: GerenciarCiclos },
+  { path: "*", Component: NotFound },
+]);
