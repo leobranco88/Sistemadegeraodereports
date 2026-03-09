@@ -1,5 +1,5 @@
 import { LogOut, Calendar, Users, LayoutDashboard, GraduationCap } from "lucide-react";
-import { useNavigate, useLocation } from "react-router";
+import { useNavigate, useLocation } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "../../firebase";
 import logo from "../../imports/logo.svg";
