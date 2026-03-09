@@ -9,6 +9,7 @@ import { NotFound } from "./pages/NotFound";
 import GerenciarProfessores from "./pages/GerenciarProfessores";
 import GerenciarHorarios from "./pages/GerenciarHorarios";
 import GerenciarAlunos from "./pages/GerenciarAlunos";
+import GerenciarCiclos from "./pages/GerenciarCiclos";
 import SecretariaDashboard from "./pages/Dashboard";
 
 export const router = createBrowserRouter([
@@ -18,9 +19,4 @@ export const router = createBrowserRouter([
   { path: "/report/create/:studentId?", Component: CreateReport },
   { path: "/report/view/:reportId", Component: ViewReport },
   { path: "/confirm/:reportId", Component: ParentConfirmation },
-  { path: "/secretaria", Component: SecretariaDashboard },
-  { path: "/secretaria/professores", Component: GerenciarProfessores },
-  { path: "/secretaria/alunos", Component: GerenciarAlunos },
-  { path: "/secretaria/horarios", Component: GerenciarHorarios },
-  { path: "*", Component: NotFound },
-]);
+  { path
