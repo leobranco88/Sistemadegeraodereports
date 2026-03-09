@@ -16,7 +16,7 @@ export const router = createBrowserRouter([
   { path: "/", Component: Login },
   { path: "/professor", Component: ProfessorDashboard },
   { path: "/coordinator", Component: CoordinatorDashboard },
-  { path: "/report/create/:studentId?", Component: CreateReport },
+ { path: "/report/create/:studentId?/:reportId?", Component: CreateReport },
   { path: "/report/view/:reportId", Component: ViewReport },
   { path: "/confirm/:reportId", Component: ParentConfirmation },
   { path: "/secretaria", Component: SecretariaDashboard },
