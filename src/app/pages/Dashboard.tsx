@@ -66,7 +66,7 @@ export default function Dashboard() {
   const getProgressoCiclo = (ciclo: Ciclo) => {
     const total = ciclo.alunoIds.length;
     const feitos = relatorios.filter(r =>
-      ciclo.alunoIds.includes(r.studentId) && r.status === "published"
+      ciclo.alunoIds.includes(r.studentId) && r.status === "published" && r.period === ciclo.periodo
     ).length;
     return { feitos, total, pct: total > 0 ? Math.round((feitos / total) * 100) : 0 };
   };
@@ -166,7 +166,7 @@ export default function Dashboard() {
                     </div>
                     <div className="flex flex-wrap gap-1">
                       {ciclo.alunosNomes.map((nome, i) => {
-                        const rel = relatorios.find(r => r.studentId === ciclo.alunoIds[i]);
+                        const rel = relatorios.find(r => r.studentId === ciclo.alunoIds[i] && r.period === ciclo.periodo);
                         const publicado = rel?.status === "published";
                         return (
                           <span key={i} className="px-2 py-0.5 rounded-full text-xs"
