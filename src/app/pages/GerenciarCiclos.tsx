@@ -66,8 +66,8 @@ export default function GerenciarCiclos() {
   const buscarDados = async () => {
     try {
       const [snapCiclos, snapProfessores, snapAlunos, snapRelatorios] = await Promise.all([
-        getDocs(query(collection(db, "ciclos"), orderBy("criadoEm", "desc"))),
-        getDocs(query(collection(db, "professores"), orderBy("nome"))),
+        getDocs(collection(db, "ciclos")),
+        getDocs(collection(db, "professores")),
         getDocs(collection(db, "alunos")),
         getDocs(collection(db, "reports")),
       ]);
