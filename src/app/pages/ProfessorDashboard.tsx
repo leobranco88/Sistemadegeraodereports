@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Logo } from "../components/Logo";
-import { StatusBadge } from "../components/StatusBadge";
 import { User } from "../types";
-import { FileText, Clock, CheckCircle, Plus, Eye, LogOut, AlertTriangle, Calendar, Pencil, Trash2 } from "lucide-react";
+import { FileText, Clock, CheckCircle, Plus, Eye, LogOut, AlertTriangle, Calendar, Pencil, Trash2, Lock } from "lucide-react";
 import { auth, db } from "../../firebase";
 import { signOut } from "firebase/auth";
 import { collection, getDocs, query, where, deleteDoc, doc } from "firebase/firestore";
@@ -103,13 +102,31 @@ export function ProfessorDashboard() {
 
   const formatarData = (iso: string) => {
     if (!iso) return "";
-    const d = new Date(iso);
-    return d.toLocaleDateString("pt-BR");
+    return new Date(iso).toLocaleDateString("pt-BR");
+  };
+
+  // Badge de status para o professor
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "draft":
+        return { label: "Rascunho", bg: "#F3F4F6", color: "#6B7280" };
+      case "published":
+        return { label: "Aguardando revisão", bg: "#EDE9FE", color: "#7C3AED" };
+      case "revisao_solicitada":
+        return { label: "Revisar!", bg: "#FEE2E2", color: "#DC2626" };
+      case "aprovado":
+        return { label: "Aprovado", bg: "#D1FAE5", color: "#065F46" };
+      default:
+        return { label: "Não iniciado", bg: "#F3F4F6", color: "#9CA3AF" };
+    }
   };
 
   const totalRelatorios = ciclos.reduce((acc, c) => acc + c.alunoIds.length, 0);
   const totalPublicados = ciclos.reduce((acc, c) =>
-    acc + c.alunoIds.filter(id => getRelatorio(id, c.periodo)?.status === "published").length, 0);
+    acc + c.alunoIds.filter(id => {
+      const s = getRelatorio(id, c.periodo)?.status;
+      return s === "published" || s === "aprovado";
+    }).length, 0);
   const totalAtrasados = ciclos.filter(c => new Date(c.deadline) < new Date()).length;
 
   return (
@@ -161,7 +178,10 @@ export function ProfessorDashboard() {
           <div className="space-y-6">
             {ciclos.map(ciclo => {
               const prazo = getStatusDeadline(ciclo.deadline);
-              const publicados = ciclo.alunoIds.filter(id => getRelatorio(id, ciclo.periodo)?.status === "published").length;
+              const publicados = ciclo.alunoIds.filter(id => {
+                const s = getRelatorio(id, ciclo.periodo)?.status;
+                return s === "published" || s === "aprovado";
+              }).length;
               const pct = ciclo.alunoIds.length > 0 ? Math.round((publicados / ciclo.alunoIds.length) * 100) : 0;
 
               return (
@@ -206,8 +226,12 @@ export function ProfessorDashboard() {
                       {ciclo.alunoIds.map((alunoId, i) => {
                         const aluno = getAluno(alunoId);
                         const relatorio = getRelatorio(alunoId, ciclo.periodo);
-                        const isDraft = relatorio?.status === "draft";
-                        const isPublished = relatorio?.status === "published";
+                        const status = relatorio?.status;
+                        const isDraft = status === "draft";
+                        const isPublished = status === "published";
+                        const isRevisao = status === "revisao_solicitada";
+                        const isAprovado = status === "aprovado";
+                        const badge = relatorio ? getStatusBadge(status!) : getStatusBadge("none");
 
                         return (
                           <tr key={alunoId} className="hover:bg-[#F9FAFB]">
@@ -217,17 +241,43 @@ export function ProfessorDashboard() {
                             <td className="px-6 py-4 text-sm text-[#6B7280]">{aluno?.turma || ciclo.turma}</td>
                             <td className="px-6 py-4 text-sm text-[#6B7280]">{aluno?.tipo || "—"}</td>
                             <td className="px-6 py-4">
-                              <StatusBadge status={relatorio?.status || "not-started"} />
+                              <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium w-fit"
+                                style={{ backgroundColor: badge.bg, color: badge.color }}>
+                                {isAprovado && <Lock size={11} />}
+                                {badge.label}
+                              </span>
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-2">
 
-                                {/* Publicado: só Ver */}
-                                {isPublished && (
+                                {/* Aprovado: só Ver, travado */}
+                                {isAprovado && (
                                   <button onClick={() => navigate("/report/view/" + relatorio!.id)}
                                     className="bg-[#070738] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
                                     <Eye size={14} /> Ver
                                   </button>
+                                )}
+
+                                {/* Publicado aguardando revisão: só Ver */}
+                                {isPublished && (
+                                  <button onClick={() => navigate("/report/view/" + relatorio!.id)}
+                                    className="bg-[#7C3AED] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                                    <Eye size={14} /> Ver
+                                  </button>
+                                )}
+
+                                {/* Revisão solicitada: Editar + Ver */}
+                                {isRevisao && (
+                                  <>
+                                    <button onClick={() => navigate("/report/create/" + alunoId + "/" + relatorio!.id + "?period=" + encodeURIComponent(ciclo.periodo))}
+                                      className="bg-[#DC2626] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                                      <Pencil size={14} /> Revisar
+                                    </button>
+                                    <button onClick={() => navigate("/report/view/" + relatorio!.id)}
+                                      className="bg-[#F3F4F6] text-[#6B7280] px-3 py-2 rounded-lg text-sm flex items-center gap-2">
+                                      <Eye size={14} />
+                                    </button>
+                                  </>
                                 )}
 
                                 {/* Rascunho: Continuar + Excluir */}
@@ -245,7 +295,7 @@ export function ProfessorDashboard() {
                                 )}
 
                                 {/* Sem relatório: Criar */}
-                                {!isDraft && !isPublished && (
+                                {!relatorio && (
                                   <button onClick={() => navigate("/report/create/" + alunoId + "?period=" + encodeURIComponent(ciclo.periodo))}
                                     className="bg-[#EC5800] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
                                     <Plus size={14} /> Criar
