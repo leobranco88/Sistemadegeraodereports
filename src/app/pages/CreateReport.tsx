@@ -38,6 +38,7 @@ export function CreateReport() {
   const [carregandoDraft, setCarregandoDraft] = useState(!!reportId);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [professorNome, setProfessorNome] = useState("Professor");
+  const [professorIdState, setProfessorIdState] = useState("");
 
   const [selectedStudent, setSelectedStudent] = useState(studentId || "");
   const [classType, setClassType] = useState<ClassType>("regular");
@@ -75,9 +76,9 @@ export function CreateReport() {
         const profSnap = await getDocs(query(collection(db, "professores"), where("email", "==", user.email)));
         if (!profSnap.empty) {
           const profDoc = profSnap.docs[0];
-          const professorId = profDoc.id;
+          setProfessorIdState(profDoc.id);
           setProfessorNome(profDoc.data().nome || user.email || "Professor");
-          const alunosSnap = await getDocs(query(collection(db, "alunos"), where("professorId", "==", professorId), where("ativo", "==", true)));
+          const alunosSnap = await getDocs(query(collection(db, "alunos"), where("professorId", "==", profDoc.id), where("ativo", "==", true)));
           setAlunos(alunosSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Aluno[]);
         }
       } catch (err) {
@@ -122,7 +123,28 @@ export function CreateReport() {
 
   const student = alunos.find(a => a.id === selectedStudent);
 
-  const buildReportData = (status: "draft" | "published") => ({
+  // Busca o cicloId ativo para o aluno selecionado
+  const buscarCicloId = async (alunoId: string): Promise<string> => {
+    try {
+      const ciclosSnap = await getDocs(
+        query(
+          collection(db, "ciclos"),
+          where("alunoIds", "array-contains", alunoId),
+          where("professorId", "==", professorIdState)
+        )
+      );
+      if (!ciclosSnap.empty) {
+        // Prefere ciclo com status != "concluido", senão pega o primeiro
+        const ativo = ciclosSnap.docs.find(d => d.data().status !== "concluido");
+        return (ativo || ciclosSnap.docs[0]).id;
+      }
+    } catch (err) {
+      console.error("Erro ao buscar cicloId:", err);
+    }
+    return "";
+  };
+
+  const buildReportData = (status: "draft" | "published", cicloId = "") => ({
     status,
     updatedAt: serverTimestamp(),
     ...(status === "published" && { publishedAt: serverTimestamp() }),
@@ -144,6 +166,8 @@ export function CreateReport() {
     engagementHours,
     observedHabits,
     professorName: professorNome,
+    professorId: professorIdState,
+    ...(cicloId && { cicloId }),
   });
 
   const updateCompetencyRating = (index: number, rating: number) => {
@@ -174,11 +198,12 @@ export function CreateReport() {
   const handleSaveDraft = async () => {
     setIsSaving(true);
     try {
+      const cicloId = selectedStudent ? await buscarCicloId(selectedStudent) : "";
       if (reportId) {
-        await updateDoc(doc(db, "reports", reportId), buildReportData("draft"));
+        await updateDoc(doc(db, "reports", reportId), buildReportData("draft", cicloId));
         alert("Rascunho atualizado!");
       } else {
-        const docRef = await addDoc(collection(db, "reports"), { ...buildReportData("draft"), createdAt: serverTimestamp() });
+        const docRef = await addDoc(collection(db, "reports"), { ...buildReportData("draft", cicloId), createdAt: serverTimestamp() });
         alert(`Rascunho salvo! ID: ${docRef.id}`);
         navigate("/report/create/" + selectedStudent + "/" + docRef.id + "?period=" + encodeURIComponent(period), { replace: true });
       }
@@ -193,11 +218,12 @@ export function CreateReport() {
     if (!selectedStudent) { alert("Selecione um aluno antes de gerar o relatório."); return; }
     setIsSaving(true);
     try {
+      const cicloId = await buscarCicloId(selectedStudent);
       let finalId = reportId;
       if (reportId) {
-        await updateDoc(doc(db, "reports", reportId), { ...buildReportData("published"), createdAt: serverTimestamp() });
+        await updateDoc(doc(db, "reports", reportId), { ...buildReportData("published", cicloId), createdAt: serverTimestamp() });
       } else {
-        const docRef = await addDoc(collection(db, "reports"), { ...buildReportData("published"), createdAt: serverTimestamp() });
+        const docRef = await addDoc(collection(db, "reports"), { ...buildReportData("published", cicloId), createdAt: serverTimestamp() });
         finalId = docRef.id;
       }
       alert(`Relatório gerado com sucesso!\n\nCompartilhe o link:\nhttps://eic-relatorios.vercel.app/report/view/${finalId}`);
