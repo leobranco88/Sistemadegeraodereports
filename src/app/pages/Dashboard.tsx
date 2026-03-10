@@ -52,7 +52,7 @@ export default function Dashboard() {
           studentId: doc.data().studentId || "",
           status: doc.data().status || "",
           publishedAt: doc.data().publishedAt?.toDate().toLocaleDateString("pt-BR") || "",
-         reportLink: `https://eic-relatorios.vercel.app/report/view/${doc.id}`,
+        reportLink: `https://eic-relatorios.vercel.app/report/view/${doc.id}`,
         }));
         setRelatorios(dadosRelatorios);
         setCiclos(snapCiclos.docs.map(d => ({ id: d.id, ...d.data() })) as Ciclo[]);
