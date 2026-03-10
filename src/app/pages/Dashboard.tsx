@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Header } from "../components/Header";
-import { Copy, MessageCircle, Eye, Filter, AlertTriangle, Clock, CheckCircle, Trash2 } from "lucide-react";
+import { Copy, MessageCircle, Eye, Filter, AlertTriangle, Clock, CheckCircle, Trash2, ThumbsUp, RotateCcw, Lock } from "lucide-react";
 import { db } from "../../firebase";
-import { collection, getDocs, orderBy, query, deleteDoc, doc } from "firebase/firestore";
+import { collection, getDocs, orderBy, query, deleteDoc, doc, updateDoc } from "firebase/firestore";
 
 interface Relatorio {
   id: string;
@@ -42,17 +42,17 @@ export default function Dashboard() {
           getDocs(query(collection(db, "reports"), orderBy("createdAt", "desc"))),
           getDocs(collection(db, "ciclos")),
         ]);
-        const dadosRelatorios = snapRelatorios.docs.map(doc => ({
-          id: doc.id,
-          studentName: doc.data().studentName || "",
-          class: doc.data().class || "",
-          professorName: doc.data().professorName || "",
-          period: doc.data().period || "",
-          situation: doc.data().situation || "",
-          studentId: doc.data().studentId || "",
-          status: doc.data().status || "",
-          publishedAt: doc.data().publishedAt?.toDate().toLocaleDateString("pt-BR") || "",
-          reportLink: `https://eic-relatorios.vercel.app/report/view/${doc.id}`,
+        const dadosRelatorios = snapRelatorios.docs.map(d => ({
+          id: d.id,
+          studentName: d.data().studentName || "",
+          class: d.data().class || "",
+          professorName: d.data().professorName || "",
+          period: d.data().period || "",
+          situation: d.data().situation || "",
+          studentId: d.data().studentId || "",
+          status: d.data().status || "",
+          publishedAt: d.data().publishedAt?.toDate().toLocaleDateString("pt-BR") || "",
+          reportLink: `https://eic-relatorios.vercel.app/report/view/${d.id}`,
         }));
         setRelatorios(dadosRelatorios);
         setCiclos(snapCiclos.docs.map(d => ({ id: d.id, ...d.data() })) as Ciclo[]);
@@ -75,12 +75,30 @@ export default function Dashboard() {
     }
   };
 
+  const handleAprovar = async (relatorioId: string, nomeAluno: string) => {
+    if (!confirm(`Aprovar o relatório de ${nomeAluno}? Ele ficará travado para edição.`)) return;
+    try {
+      await updateDoc(doc(db, "reports", relatorioId), { status: "aprovado" });
+      setRelatorios(prev => prev.map(r => r.id === relatorioId ? { ...r, status: "aprovado" } : r));
+    } catch (err) {
+      alert("Erro ao aprovar relatório.");
+    }
+  };
+
+  const handleSolicitarRevisao = async (relatorioId: string, nomeAluno: string) => {
+    if (!confirm(`Solicitar revisão do relatório de ${nomeAluno}? O professor receberá o aviso.`)) return;
+    try {
+      await updateDoc(doc(db, "reports", relatorioId), { status: "revisao_solicitada" });
+      setRelatorios(prev => prev.map(r => r.id === relatorioId ? { ...r, status: "revisao_solicitada" } : r));
+    } catch (err) {
+      alert("Erro ao solicitar revisão.");
+    }
+  };
+
   const getProgressoCiclo = (ciclo: Ciclo) => {
     const total = ciclo.alunoIds.length;
     const feitos = ciclo.alunoIds.filter(alunoId =>
-      relatorios.some(r =>
-        r.studentId === alunoId && r.status === "published" && r.period === ciclo.periodo
-      )
+      relatorios.some(r => r.studentId === alunoId && r.status === "published" && r.period === ciclo.periodo)
     ).length;
     return { feitos, total, pct: total > 0 ? Math.min(Math.round((feitos / total) * 100), 100) : 0 };
   };
@@ -97,7 +115,7 @@ export default function Dashboard() {
   const relatoriosFiltrados = relatorios.filter((r) => {
     const matchTurma = !filtroTurma || r.class.toLowerCase().includes(filtroTurma.toLowerCase());
     const matchProfessor = !filtroProfessor || r.professorName.toLowerCase().includes(filtroProfessor.toLowerCase());
-    const matchStatus = !filtroStatus || r.situation === filtroStatus;
+    const matchStatus = !filtroStatus || r.status === filtroStatus;
     return matchTurma && matchProfessor && matchStatus;
   });
 
@@ -137,6 +155,16 @@ export default function Dashboard() {
       case "needs-attention": return { bg: "#FEE2E2", color: "#DC2626" };
       case "failed": return { bg: "#F3F4F6", color: "#6B7280" };
       default: return { bg: "#F3F4F6", color: "#6B7280" };
+    }
+  };
+
+  const getStatusRelatorio = (status: string) => {
+    switch (status) {
+      case "draft": return { label: "Rascunho", bg: "#F3F4F6", color: "#6B7280" };
+      case "published": return { label: "Aguardando revisão", bg: "#EDE9FE", color: "#7C3AED" };
+      case "revisao_solicitada": return { label: "Revisão solicitada", bg: "#FEE2E2", color: "#DC2626" };
+      case "aprovado": return { label: "Aprovado", bg: "#D1FAE5", color: "#065F46" };
+      default: return { label: status, bg: "#F3F4F6", color: "#6B7280" };
     }
   };
 
@@ -181,7 +209,7 @@ export default function Dashboard() {
                     <div className="flex flex-wrap gap-1">
                       {ciclo.alunosNomes.map((nome, i) => {
                         const rel = relatorios.find(r => r.studentId === ciclo.alunoIds[i] && r.period === ciclo.periodo);
-                        const publicado = rel?.status === "published";
+                        const publicado = rel?.status === "published" || rel?.status === "aprovado";
                         return (
                           <span key={i} className="px-2 py-0.5 rounded-full text-xs"
                             style={{ backgroundColor: publicado ? "#D1FAE5" : "#F3F4F6", color: publicado ? "#065F46" : "#6B7280" }}>
@@ -223,10 +251,10 @@ export default function Dashboard() {
                 className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2"
                 style={{ borderColor: "#E5E7EB" }}>
                 <option value="">Todos</option>
-                <option value="approved">Aprovado(a)</option>
-                <option value="in-progress">Em Progresso</option>
-                <option value="needs-attention">Necessita Atenção</option>
-                <option value="failed">Reprovado(a)</option>
+                <option value="draft">Rascunho</option>
+                <option value="published">Aguardando revisão</option>
+                <option value="revisao_solicitada">Revisão solicitada</option>
+                <option value="aprovado">Aprovado</option>
               </select>
             </div>
           </div>
@@ -249,6 +277,7 @@ export default function Dashboard() {
                     <th className="px-6 py-4 text-left text-white">Professor</th>
                     <th className="px-6 py-4 text-left text-white">Período</th>
                     <th className="px-6 py-4 text-left text-white">Publicado em</th>
+                    <th className="px-6 py-4 text-left text-white">Situação</th>
                     <th className="px-6 py-4 text-left text-white">Status</th>
                     <th className="px-6 py-4 text-left text-white">Ações</th>
                   </tr>
@@ -256,6 +285,9 @@ export default function Dashboard() {
                 <tbody>
                   {relatoriosFiltrados.map((r, index) => {
                     const cor = getSituacaoCor(r.situation);
+                    const statusRel = getStatusRelatorio(r.status);
+                    const podeAvaliar = r.status === "published";
+                    const aprovado = r.status === "aprovado";
                     return (
                       <tr key={r.id} style={{
                         backgroundColor: index % 2 === 0 ? "#FFFFFF" : "#F9FAFB",
@@ -275,19 +307,42 @@ export default function Dashboard() {
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
+                          <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium w-fit"
+                            style={{ backgroundColor: statusRel.bg, color: statusRel.color }}>
+                            {aprovado && <Lock size={11} />}
+                            {statusRel.label}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-1">
                             <button onClick={() => copiarLink(r.reportLink)}
                               className="p-2 rounded-lg hover:bg-gray-100 transition-colors" title="Copiar link"
-                              style={{ color: "#8B5CF6" }}><Copy size={18} /></button>
+                              style={{ color: "#8B5CF6" }}><Copy size={16} /></button>
                             <button onClick={() => enviarWhatsApp(r.studentName, r.reportLink)}
                               className="p-2 rounded-lg hover:bg-gray-100 transition-colors" title="Enviar WhatsApp"
-                              style={{ color: "#10B981" }}><MessageCircle size={18} /></button>
+                              style={{ color: "#10B981" }}><MessageCircle size={16} /></button>
                             <button onClick={() => window.open(r.reportLink, "_blank")}
                               className="p-2 rounded-lg hover:bg-gray-100 transition-colors" title="Ver relatório"
-                              style={{ color: "#EC5800" }}><Eye size={18} /></button>
-                            <button onClick={() => handleExcluir(r.id, r.studentName)}
-                              className="p-2 rounded-lg hover:bg-red-50 transition-colors" title="Excluir relatório"
-                              style={{ color: "#DC2626" }}><Trash2 size={18} /></button>
+                              style={{ color: "#EC5800" }}><Eye size={16} /></button>
+
+                            {/* Botões de revisão — só para published */}
+                            {podeAvaliar && (
+                              <>
+                                <button onClick={() => handleAprovar(r.id, r.studentName)}
+                                  className="p-2 rounded-lg hover:bg-green-50 transition-colors" title="Aprovar relatório"
+                                  style={{ color: "#065F46" }}><ThumbsUp size={16} /></button>
+                                <button onClick={() => handleSolicitarRevisao(r.id, r.studentName)}
+                                  className="p-2 rounded-lg hover:bg-yellow-50 transition-colors" title="Solicitar revisão"
+                                  style={{ color: "#92400E" }}><RotateCcw size={16} /></button>
+                              </>
+                            )}
+
+                            {/* Excluir — não aparece para aprovados */}
+                            {!aprovado && (
+                              <button onClick={() => handleExcluir(r.id, r.studentName)}
+                                className="p-2 rounded-lg hover:bg-red-50 transition-colors" title="Excluir relatório"
+                                style={{ color: "#DC2626" }}><Trash2 size={16} /></button>
+                            )}
                           </div>
                         </td>
                       </tr>
