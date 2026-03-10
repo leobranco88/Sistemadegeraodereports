@@ -11,14 +11,16 @@ import GerenciarHorarios from "./pages/GerenciarHorarios";
 import GerenciarAlunos from "./pages/GerenciarAlunos";
 import GerenciarCiclos from "./pages/GerenciarCiclos";
 import SecretariaDashboard from "./pages/Dashboard";
+import { AgendarReuniao } from "./pages/AgendarReuniao";
 
 export const router = createBrowserRouter([
   { path: "/", Component: Login },
   { path: "/professor", Component: ProfessorDashboard },
   { path: "/coordinator", Component: CoordinatorDashboard },
- { path: "/report/create/:studentId?/:reportId?", Component: CreateReport },
+  { path: "/report/create/:studentId?/:reportId?", Component: CreateReport },
   { path: "/report/view/:reportId", Component: ViewReport },
   { path: "/confirm/:reportId", Component: ParentConfirmation },
+  { path: "/agendar/:professorId", Component: AgendarReuniao },
   { path: "/secretaria", Component: SecretariaDashboard },
   { path: "/secretaria/professores", Component: GerenciarProfessores },
   { path: "/secretaria/alunos", Component: GerenciarAlunos },
