@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Header } from "../components/Header";
-import { Copy, MessageCircle, Eye, Filter, AlertTriangle, Clock, CheckCircle } from "lucide-react";
+import { Copy, MessageCircle, Eye, Filter, AlertTriangle, Clock, CheckCircle, Trash2 } from "lucide-react";
 import { db } from "../../firebase";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { collection, getDocs, orderBy, query, deleteDoc, doc } from "firebase/firestore";
 
 interface Relatorio {
   id: string;
@@ -52,7 +52,7 @@ export default function Dashboard() {
           studentId: doc.data().studentId || "",
           status: doc.data().status || "",
           publishedAt: doc.data().publishedAt?.toDate().toLocaleDateString("pt-BR") || "",
-        reportLink: `https://eic-relatorios.vercel.app/report/view/${doc.id}`,
+          reportLink: `https://eic-relatorios.vercel.app/report/view/${doc.id}`,
         }));
         setRelatorios(dadosRelatorios);
         setCiclos(snapCiclos.docs.map(d => ({ id: d.id, ...d.data() })) as Ciclo[]);
@@ -64,6 +64,16 @@ export default function Dashboard() {
     };
     buscarDados();
   }, []);
+
+  const handleExcluir = async (relatorioId: string, nomeAluno: string) => {
+    if (!confirm(`Excluir o relatório de ${nomeAluno}? Esta ação não pode ser desfeita.`)) return;
+    try {
+      await deleteDoc(doc(db, "reports", relatorioId));
+      setRelatorios(prev => prev.filter(r => r.id !== relatorioId));
+    } catch (err) {
+      alert("Erro ao excluir relatório.");
+    }
+  };
 
   const getProgressoCiclo = (ciclo: Ciclo) => {
     const total = ciclo.alunoIds.length;
@@ -275,6 +285,9 @@ export default function Dashboard() {
                             <button onClick={() => window.open(r.reportLink, "_blank")}
                               className="p-2 rounded-lg hover:bg-gray-100 transition-colors" title="Ver relatório"
                               style={{ color: "#EC5800" }}><Eye size={18} /></button>
+                            <button onClick={() => handleExcluir(r.id, r.studentName)}
+                              className="p-2 rounded-lg hover:bg-red-50 transition-colors" title="Excluir relatório"
+                              style={{ color: "#DC2626" }}><Trash2 size={18} /></button>
                           </div>
                         </td>
                       </tr>
