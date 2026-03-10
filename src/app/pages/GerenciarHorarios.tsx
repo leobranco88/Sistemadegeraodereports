@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Header } from "../components/Header";
-import { Plus, Clock, CheckCircle, User, GraduationCap, Calendar, X } from "lucide-react";
+import { Plus, Clock, CheckCircle, User, GraduationCap, Calendar, X, Trash2 } from "lucide-react";
 import { db } from "../../firebase";
-import { collection, getDocs, addDoc, query, orderBy, where } from "firebase/firestore";
+import { collection, getDocs, addDoc, query, orderBy, doc, deleteDoc } from "firebase/firestore";
 
 interface Horario {
   id: string;
@@ -82,6 +82,18 @@ export default function GerenciarHorarios() {
     const matchStatus = !filtroStatus || h.status === filtroStatus;
     return matchProf && matchStatus;
   });
+
+  // ✅ Deletar horário individual
+  const deletarHorario = async (id: string) => {
+    if (!confirm("Deletar este horário?")) return;
+    try {
+      await deleteDoc(doc(db, "horarios", id));
+      setHorarios(prev => prev.filter(h => h.id !== id));
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao deletar horário.");
+    }
+  };
 
   const gerarHorarios = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -310,7 +322,17 @@ export default function GerenciarHorarios() {
             {horariosFiltrados.map(horario => {
               const cor = getStatusColor(horario.status);
               return (
-                <div key={horario.id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+                <div key={horario.id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow relative">
+                  {/* ✅ Lixeira — apenas em horários livres */}
+                  {horario.status === "livre" && (
+                    <button
+                      onClick={() => deletarHorario(horario.id)}
+                      className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                      title="Deletar horário"
+                    >
+                      <Trash2 size={16} style={{ color: "#EF4444" }} />
+                    </button>
+                  )}
                   <div className="flex items-center gap-2 mb-4">
                     {getStatusIcon(horario.status)}
                     <span className="px-3 py-1 rounded-full text-sm font-medium capitalize"
