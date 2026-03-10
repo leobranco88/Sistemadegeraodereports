@@ -14,6 +14,7 @@ interface Relatorio {
   reportLink: string;
   studentId: string;
   status: string;
+  publishedAt?: string;
 }
 
 interface Ciclo {
@@ -50,6 +51,7 @@ export default function Dashboard() {
           situation: doc.data().situation || "",
           studentId: doc.data().studentId || "",
           status: doc.data().status || "",
+          publishedAt: doc.data().publishedAt?.toDate().toLocaleDateString("pt-BR") || "",
           reportLink: `https://studentprogressreportdesign.vercel.app?reportId=${doc.id}`,
         }));
         setRelatorios(dadosRelatorios);
@@ -174,6 +176,7 @@ export default function Dashboard() {
                           <span key={i} className="px-2 py-0.5 rounded-full text-xs"
                             style={{ backgroundColor: publicado ? "#D1FAE5" : "#F3F4F6", color: publicado ? "#065F46" : "#6B7280" }}>
                             {publicado ? "✓" : "○"} {nome}
+                            {publicado && rel?.publishedAt ? <span style={{ color: "#9CA3AF" }}> · {rel.publishedAt}</span> : null}
                           </span>
                         );
                       })}
@@ -235,6 +238,7 @@ export default function Dashboard() {
                     <th className="px-6 py-4 text-left text-white">Turma</th>
                     <th className="px-6 py-4 text-left text-white">Professor</th>
                     <th className="px-6 py-4 text-left text-white">Período</th>
+                    <th className="px-6 py-4 text-left text-white">Publicado em</th>
                     <th className="px-6 py-4 text-left text-white">Status</th>
                     <th className="px-6 py-4 text-left text-white">Ações</th>
                   </tr>
@@ -251,6 +255,9 @@ export default function Dashboard() {
                         <td className="px-6 py-4" style={{ color: "#3D3D3D" }}>{r.class}</td>
                         <td className="px-6 py-4" style={{ color: "#3D3D3D" }}>{r.professorName}</td>
                         <td className="px-6 py-4" style={{ color: "#3D3D3D" }}>{r.period}</td>
+                        <td className="px-6 py-4" style={{ color: r.publishedAt ? "#3D3D3D" : "#9CA3AF" }}>
+                          {r.publishedAt || "—"}
+                        </td>
                         <td className="px-6 py-4">
                           <span className="px-3 py-1 rounded-full text-sm font-medium"
                             style={{ backgroundColor: cor.bg, color: cor.color }}>
