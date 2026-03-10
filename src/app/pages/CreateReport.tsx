@@ -200,7 +200,7 @@ export function CreateReport() {
         const docRef = await addDoc(collection(db, "reports"), { ...buildReportData("published"), createdAt: serverTimestamp() });
         finalId = docRef.id;
       }
-      alert(`Relatório gerado com sucesso!\n\nCompartilhe o link:\nhttps://studentprogressreportdesign.vercel.app?reportId=${finalId}`);
+      alert(`Relatório gerado com sucesso!\n\nCompartilhe o link:\nhttps://eic-relatorios.vercel.app/report/view/${finalId}`);
       navigate("/professor");
     } catch (err) {
       alert("Erro ao gerar relatório. Tente novamente.");
