@@ -125,6 +125,7 @@ export function CreateReport() {
   const buildReportData = (status: "draft" | "published") => ({
     status,
     updatedAt: serverTimestamp(),
+    ...(status === "published" && { publishedAt: serverTimestamp() }),
     studentId: selectedStudent,
     studentName: student?.nome || "",
     class: student?.turma || "",
