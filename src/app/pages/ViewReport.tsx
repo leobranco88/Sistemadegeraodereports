@@ -209,14 +209,18 @@ function SignatureSection({ reportId }: { reportId: string }) {
   );
 }
 
-// ✅ ATUALIZADO: redireciona para /agendar em vez de abrir WhatsApp
-function MeetingSchedule({ studentName, professorId, reportId }: { studentName: string; professorId: string; reportId: string }) {
+// ✅ Usa cicloId (salvo no relatório) para redirecionar ao agendamento
+function MeetingSchedule({ studentName, cicloId, reportId }: { studentName: string; cicloId: string; reportId: string }) {
   const [selected, setSelected] = useState<"sim" | "nao" | null>(null);
 
   const handleSim = () => {
     setSelected("sim");
+    if (!cicloId) {
+      alert("Agendamento não disponível para este relatório.");
+      return;
+    }
     const params = new URLSearchParams({ aluno: studentName, reportId });
-    window.location.href = `/agendar/${professorId}?${params.toString()}`;
+    window.location.href = `/agendar/${cicloId}?${params.toString()}`;
   };
 
   return (
@@ -387,10 +391,10 @@ export function ViewReport() {
             </div>
             <TeacherVoice message={report.professorVoice} professorName={report.professorName} />
             <SignatureSection reportId={reportId!} />
-            {/* ✅ Passa professorId e reportId para o componente */}
+            {/* ✅ Usa cicloId salvo no relatório */}
             <MeetingSchedule
               studentName={report.studentName}
-              professorId={report.professorId}
+              cicloId={report.cicloId || ""}
               reportId={reportId!}
             />
           </div>
