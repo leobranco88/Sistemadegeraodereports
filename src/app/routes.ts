@@ -20,7 +20,7 @@ export const router = createBrowserRouter([
   { path: "/report/create/:studentId?/:reportId?", Component: CreateReport },
   { path: "/report/view/:reportId", Component: ViewReport },
   { path: "/confirm/:reportId", Component: ParentConfirmation },
-  { path: "/agendar/:professorId", Component: AgendarReuniao },
+  { path: "/agendar/:cicloId", Component: AgendarReuniao },
   { path: "/secretaria", Component: SecretariaDashboard },
   { path: "/secretaria/professores", Component: GerenciarProfessores },
   { path: "/secretaria/alunos", Component: GerenciarAlunos },
