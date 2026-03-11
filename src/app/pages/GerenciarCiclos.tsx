@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Header } from "../components/Header";
-import { Plus, Calendar, Clock, CheckCircle, AlertTriangle, X, ChevronRight, CalendarCheck } from "lucide-react";
+import { Plus, Calendar, Clock, CheckCircle, AlertTriangle, X, ChevronRight, CalendarCheck, FlaskConical } from "lucide-react";
 import { db } from "../../firebase";
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
 
@@ -19,6 +19,7 @@ interface Ciclo {
   professorNome: string;
   periodo: string;
   deadline: string;
+  dataProva?: string;
   alunoIds: string[];
   alunosNomes: string[];
   criadoEm: string;
@@ -95,6 +96,7 @@ export default function GerenciarCiclos() {
   const [professorSelecionado, setProfessorSelecionado] = useState("");
   const [periodo, setPeriodo] = useState("");
   const [deadline, setDeadline] = useState("");
+  const [dataProva, setDataProva] = useState("");
   const [alunosSelecionados, setAlunosSelecionados] = useState<string[]>([]);
 
   const [cicloAgendando, setCicloAgendando] = useState<string | null>(null);
@@ -144,13 +146,14 @@ export default function GerenciarCiclos() {
         professorNome: prof?.nome || "",
         periodo,
         deadline,
+        dataProva: dataProva || null,
         alunoIds: alunosSelecionados,
         alunosNomes: alunosDosCiclo.map(a => a.nome),
         criadoEm: new Date().toISOString(),
         status: "ativo",
       });
       await buscarDados();
-      setProfessorSelecionado(""); setPeriodo(""); setDeadline(""); setAlunosSelecionados([]);
+      setProfessorSelecionado(""); setPeriodo(""); setDeadline(""); setDataProva(""); setAlunosSelecionados([]);
       setMostrarFormulario(false);
     } catch (err) {
       console.error(err);
@@ -170,6 +173,20 @@ export default function GerenciarCiclos() {
     const atual = ciclo.status || "ativo";
     const proximo = PROXIMOS_STATUS[atual];
     if (!proximo) return;
+
+    // Validação: só pode marcar teste aplicado a partir da data da prova
+    if (atual === "ativo" && ciclo.dataProva) {
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      const dataP = new Date(ciclo.dataProva + "T00:00:00");
+      if (hoje < dataP) {
+        alert(
+          `A prova está agendada para ${dataP.toLocaleDateString("pt-BR")}.\nNão é possível marcar como aplicada antes dessa data.`
+        );
+        return;
+      }
+    }
+
     if (proximo === "agendamentos_abertos") {
       setCicloAgendando(ciclo.id);
       return;
@@ -239,6 +256,19 @@ export default function GerenciarCiclos() {
     return { label: `${diff}d restantes`, bg: "#D1FAE5", color: "#065F46", icon: <CheckCircle size={14} /> };
   };
 
+  // Retorna info visual sobre a data da prova
+  const getInfoProva = (dataProva?: string) => {
+    if (!dataProva) return null;
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const dataP = new Date(dataProva + "T00:00:00");
+    const diff = Math.ceil((dataP.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+    const label = dataP.toLocaleDateString("pt-BR");
+    if (diff > 0) return { label: `Prova em ${label} (${diff}d)`, bg: "#DBEAFE", color: "#1D4ED8", realizada: false };
+    if (diff === 0) return { label: `Prova hoje! ${label}`, bg: "#FEF3C7", color: "#92400E", realizada: false };
+    return { label: `Prova realizada em ${label}`, bg: "#D1FAE5", color: "#065F46", realizada: true };
+  };
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#F0F4F8" }}>
       <Header />
@@ -278,11 +308,24 @@ export default function GerenciarCiclos() {
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2" style={{ color: "#3D3D3D" }}>Deadline</label>
-                <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)}
-                  className="w-full px-4 py-2 border rounded-lg focus:outline-none" style={{ borderColor: "#E5E7EB" }} required />
+
+              {/* Deadline + Data da Prova */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: "#3D3D3D" }}>Deadline dos relatórios</label>
+                  <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-lg focus:outline-none" style={{ borderColor: "#E5E7EB" }} required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: "#3D3D3D" }}>
+                    Data da prova
+                    <span className="ml-1 font-normal" style={{ color: "#9CA3AF" }}>(opcional)</span>
+                  </label>
+                  <input type="date" value={dataProva} onChange={(e) => setDataProva(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-lg focus:outline-none" style={{ borderColor: "#E5E7EB" }} />
+                </div>
               </div>
+
               {professorSelecionado && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
@@ -425,6 +468,7 @@ export default function GerenciarCiclos() {
               const statusAtual = ciclo.status || "ativo";
               const statusConfig = STATUS_CONFIG[statusAtual as keyof typeof STATUS_CONFIG];
               const proximoBotao = BOTAO_LABEL[statusAtual];
+              const infoProva = getInfoProva(ciclo.dataProva);
 
               return (
                 <div key={ciclo.id} className="bg-white rounded-lg shadow-md p-6">
@@ -450,6 +494,17 @@ export default function GerenciarCiclos() {
                       </button>
                     </div>
                   </div>
+
+                  {/* Badge data da prova */}
+                  {infoProva && (
+                    <div className="mb-4 flex items-center gap-2 px-3 py-2 rounded-lg w-fit"
+                      style={{ backgroundColor: infoProva.bg }}>
+                      <FlaskConical size={14} style={{ color: infoProva.color }} />
+                      <span className="text-xs font-medium" style={{ color: infoProva.color }}>
+                        {infoProva.label}
+                      </span>
+                    </div>
+                  )}
 
                   <div className="mb-4">
                     <div className="flex items-center justify-between text-sm mb-1">
