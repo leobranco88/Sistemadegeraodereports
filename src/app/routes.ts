@@ -10,6 +10,7 @@ import GerenciarProfessores from "./pages/GerenciarProfessores";
 import GerenciarHorarios from "./pages/GerenciarHorarios";
 import GerenciarAlunos from "./pages/GerenciarAlunos";
 import GerenciarCiclos from "./pages/GerenciarCiclos";
+import GerenciarReunioes from "./pages/GerenciarReunioes";
 import SecretariaDashboard from "./pages/Dashboard";
 import { AgendarReuniao } from "./pages/AgendarReuniao";
 
@@ -26,5 +27,6 @@ export const router = createBrowserRouter([
   { path: "/secretaria/alunos", Component: GerenciarAlunos },
   { path: "/secretaria/horarios", Component: GerenciarHorarios },
   { path: "/secretaria/ciclos", Component: GerenciarCiclos },
+  { path: "/secretaria/reunioes", Component: GerenciarReunioes },
   { path: "*", Component: NotFound },
 ]);
