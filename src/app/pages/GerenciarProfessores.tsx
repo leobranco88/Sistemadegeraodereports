@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Header } from "../components/Header";
-import { Plus, Edit, ToggleLeft, ToggleRight, X } from "lucide-react";
+import { Plus, Edit, ToggleLeft, ToggleRight, X, Eye, EyeOff } from "lucide-react";
 import { db } from "../../firebase";
 import { collection, getDocs, addDoc, updateDoc, doc, query, orderBy } from "firebase/firestore";
 
@@ -19,8 +19,8 @@ const turmasDisponiveis = [
 ];
 
 const grupos = [
-  { label: "Kids", turmas: turmasDisponiveis.filter(t => t.startsWith("Kids")) },
-  { label: "Teens", turmas: turmasDisponiveis.filter(t => t.startsWith("Teens")) },
+  { label: "Kids",   turmas: turmasDisponiveis.filter(t => t.startsWith("Kids")) },
+  { label: "Teens",  turmas: turmasDisponiveis.filter(t => t.startsWith("Teens")) },
   { label: "Adults", turmas: turmasDisponiveis.filter(t => t.startsWith("Adults")) },
 ];
 
@@ -33,20 +33,20 @@ export default function GerenciarProfessores() {
 
   const [formNome, setFormNome] = useState("");
   const [formEmail, setFormEmail] = useState("");
+  const [formSenha, setFormSenha] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [formTurmas, setFormTurmas] = useState<string[]>([]);
 
-  useEffect(() => {
-    buscarProfessores();
-  }, []);
+  useEffect(() => { buscarProfessores(); }, []);
 
   const buscarProfessores = async () => {
     try {
       const q = query(collection(db, "professores"), orderBy("nome"));
       const snapshot = await getDocs(q);
-      const dados = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        turmas: doc.data().turmas || [],
+      const dados = snapshot.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+        turmas: d.data().turmas || [],
       })) as Professor[];
       setProfessores(dados);
     } catch (err) {
@@ -58,9 +58,8 @@ export default function GerenciarProfessores() {
 
   const abrirModalNovo = () => {
     setProfessorEditando(null);
-    setFormNome("");
-    setFormEmail("");
-    setFormTurmas([]);
+    setFormNome(""); setFormEmail(""); setFormSenha(""); setFormTurmas([]);
+    setMostrarSenha(false);
     setMostrarModal(true);
   };
 
@@ -68,21 +67,60 @@ export default function GerenciarProfessores() {
     setProfessorEditando(professor);
     setFormNome(professor.nome);
     setFormEmail(professor.email);
+    setFormSenha("");
     setFormTurmas(professor.turmas || []);
+    setMostrarSenha(false);
     setMostrarModal(true);
   };
 
   const salvarProfessor = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!professorEditando && formSenha.length < 6) {
+      alert("A senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+
     setSalvando(true);
     try {
       if (professorEditando) {
+        // Edição: só atualiza Firestore
         await updateDoc(doc(db, "professores", professorEditando.id), {
           nome: formNome,
           email: formEmail,
           turmas: formTurmas,
         });
       } else {
+        // Novo professor: cria no Firebase Auth via Admin API (Cloud Function)
+        // Como não temos acesso ao Admin SDK no client, usamos a API REST do Firebase Auth
+        const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+        const res = await fetch(
+          `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: formEmail,
+              password: formSenha,
+              returnSecureToken: false,
+            }),
+          }
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          const msg = data?.error?.message || "Erro ao criar conta.";
+          if (msg === "EMAIL_EXISTS") {
+            alert("Este email já está cadastrado no sistema de autenticação.");
+          } else {
+            alert(`Erro: ${msg}`);
+          }
+          setSalvando(false);
+          return;
+        }
+
+        // Cria no Firestore
         await addDoc(collection(db, "professores"), {
           nome: formNome,
           email: formEmail,
@@ -90,6 +128,7 @@ export default function GerenciarProfessores() {
           ativo: true,
         });
       }
+
       await buscarProfessores();
       setMostrarModal(false);
     } catch (err) {
@@ -124,8 +163,7 @@ export default function GerenciarProfessores() {
           <button onClick={abrirModalNovo}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-white font-medium hover:opacity-90 transition-opacity"
             style={{ backgroundColor: "#EC5800" }}>
-            <Plus size={20} />
-            Adicionar Professor
+            <Plus size={20} /> Adicionar Professor
           </button>
         </div>
 
@@ -200,6 +238,7 @@ export default function GerenciarProfessores() {
         </div>
       </div>
 
+      {/* Modal */}
       {mostrarModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -225,8 +264,45 @@ export default function GerenciarProfessores() {
                 <label className="block text-sm font-medium mb-2" style={{ color: "#3D3D3D" }}>Email</label>
                 <input type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)}
                   className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2"
-                  style={{ borderColor: "#E5E7EB" }} placeholder="professor@eicschool.com.br" required />
+                  style={{ borderColor: "#E5E7EB" }} placeholder="professor@eicschool.com.br"
+                  required disabled={!!professorEditando} />
+                {professorEditando && (
+                  <p className="text-xs mt-1" style={{ color: "#9CA3AF" }}>
+                    O email não pode ser alterado após o cadastro.
+                  </p>
+                )}
               </div>
+
+              {/* Senha — só no cadastro novo */}
+              {!professorEditando && (
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: "#3D3D3D" }}>
+                    Senha inicial
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={mostrarSenha ? "text" : "password"}
+                      value={formSenha}
+                      onChange={(e) => setFormSenha(e.target.value)}
+                      className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 pr-12"
+                      style={{ borderColor: "#E5E7EB" }}
+                      placeholder="Mínimo 6 caracteres"
+                      required
+                      minLength={6}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setMostrarSenha(!mostrarSenha)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1"
+                      style={{ color: "#9CA3AF" }}>
+                      {mostrarSenha ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  <p className="text-xs mt-1" style={{ color: "#9CA3AF" }}>
+                    Compartilhe esta senha com o professor. Ele poderá alterá-la depois.
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium mb-3" style={{ color: "#3D3D3D" }}>Turmas que Leciona</label>
@@ -260,7 +336,7 @@ export default function GerenciarProfessores() {
                 <button type="submit" disabled={salvando}
                   className="flex-1 px-4 py-3 rounded-lg text-white font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
                   style={{ backgroundColor: "#EC5800" }}>
-                  {salvando ? "Salvando..." : "Salvar"}
+                  {salvando ? "Salvando..." : professorEditando ? "Salvar alterações" : "Cadastrar professor"}
                 </button>
                 <button type="button" onClick={() => setMostrarModal(false)}
                   className="flex-1 px-4 py-3 rounded-lg font-medium hover:opacity-90 transition-opacity"
