@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { db } from "../../firebase";
 import { doc, getDoc } from "firebase/firestore";
-import { Download } from "lucide-react";
+import { Download, Lock } from "lucide-react";
 import { Logo } from "../components/Logo";
 import { Radar, RadarChart as RechartsRadar, PolarGrid, PolarAngleAxis, ResponsiveContainer } from "recharts";
 import { QRCodeSVG } from "qrcode.react";
@@ -209,11 +209,22 @@ function SignatureSection({ reportId }: { reportId: string }) {
   );
 }
 
-// ✅ Usa cicloId (salvo no relatório) para redirecionar ao agendamento
-function MeetingSchedule({ studentName, cicloId, reportId }: { studentName: string; cicloId: string; reportId: string }) {
+function MeetingSchedule({
+  studentName,
+  cicloId,
+  reportId,
+  reportStatus,
+}: {
+  studentName: string;
+  cicloId: string;
+  reportId: string;
+  reportStatus: string;
+}) {
   const [selected, setSelected] = useState<"sim" | "nao" | null>(null);
+  const aprovado = reportStatus === "aprovado";
 
   const handleSim = () => {
+    if (!aprovado) return;
     setSelected("sim");
     if (!cicloId) {
       alert("Agendamento não disponível para este relatório.");
@@ -226,25 +237,50 @@ function MeetingSchedule({ studentName, cicloId, reportId }: { studentName: stri
   return (
     <div className="bg-white rounded-2xl shadow-sm p-6">
       <h3 className="text-lg font-semibold text-[#070738] mb-2">Agendar Reunião?</h3>
-      <p className="text-sm text-[#9CA3AF] mb-4">Gostaria de agendar uma reunião para discutir o progresso do aluno?</p>
+      <p className="text-sm text-[#9CA3AF] mb-4">
+        Gostaria de agendar uma reunião para discutir o progresso do aluno?
+      </p>
+
+      {/* Aviso quando relatório ainda não está aprovado */}
+      {!aprovado && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl mb-4"
+          style={{ backgroundColor: "#FEF3C7" }}>
+          <Lock size={16} style={{ color: "#92400E", flexShrink: 0 }} />
+          <p className="text-sm" style={{ color: "#92400E" }}>
+            O agendamento estará disponível após a aprovação do relatório pela coordenação.
+          </p>
+        </div>
+      )}
+
       <div className="flex gap-3">
         <button
           onClick={handleSim}
+          disabled={!aprovado}
           className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-all ${
-            selected === "sim" ? "bg-[#EC5800] text-white shadow-md" : "bg-[#F0F4F8] text-[#9CA3AF] hover:bg-[#E5E7EB]"
+            !aprovado
+              ? "opacity-40 cursor-not-allowed bg-[#F0F4F8] text-[#9CA3AF]"
+              : selected === "sim"
+              ? "bg-[#EC5800] text-white shadow-md"
+              : "bg-[#F0F4F8] text-[#9CA3AF] hover:bg-[#E5E7EB]"
           }`}
         >
           Sim
         </button>
         <button
-          onClick={() => setSelected("nao")}
+          onClick={() => aprovado && setSelected("nao")}
+          disabled={!aprovado}
           className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-all ${
-            selected === "nao" ? "bg-[#EC5800] text-white shadow-md" : "bg-[#F0F4F8] text-[#9CA3AF] hover:bg-[#E5E7EB]"
+            !aprovado
+              ? "opacity-40 cursor-not-allowed bg-[#F0F4F8] text-[#9CA3AF]"
+              : selected === "nao"
+              ? "bg-[#EC5800] text-white shadow-md"
+              : "bg-[#F0F4F8] text-[#9CA3AF] hover:bg-[#E5E7EB]"
           }`}
         >
           Não
         </button>
       </div>
+
       {selected === "nao" && (
         <p className="text-xs text-[#9CA3AF] mt-3 text-center">
           Tudo bem! O relatório fica disponível para consulta a qualquer momento.
@@ -391,11 +427,11 @@ export function ViewReport() {
             </div>
             <TeacherVoice message={report.professorVoice} professorName={report.professorName} />
             <SignatureSection reportId={reportId!} />
-            {/* ✅ Usa cicloId salvo no relatório */}
             <MeetingSchedule
               studentName={report.studentName}
               cicloId={report.cicloId || ""}
               reportId={reportId!}
+              reportStatus={report.status || ""}
             />
           </div>
           <Footer />
