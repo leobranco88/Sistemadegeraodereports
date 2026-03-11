@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Logo } from "../components/Logo";
 import { User } from "../types";
-import { FileText, Clock, CheckCircle, Plus, Eye, LogOut, AlertTriangle, Calendar, Pencil, Trash2, Lock } from "lucide-react";
+import { FileText, Clock, CheckCircle, Plus, Eye, LogOut, AlertTriangle, Calendar, Pencil, Trash2, Lock, CalendarCheck } from "lucide-react";
 import { auth, db } from "../../firebase";
 import { signOut } from "firebase/auth";
 import { collection, getDocs, query, where, deleteDoc, doc } from "firebase/firestore";
@@ -33,12 +33,24 @@ interface Relatorio {
   period: string;
 }
 
+interface Reuniao {
+  id: string;
+  aluno: string;
+  nomePai: string;
+  data: string;   // "10/03/2026"
+  hora: string;   // "09:00"
+  cicloId: string;
+  reportId: string;
+}
+
 export function ProfessorDashboard() {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [professorId, setProfessorId] = useState<string>("");
   const [ciclos, setCiclos] = useState<Ciclo[]>([]);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [relatorios, setRelatorios] = useState<Relatorio[]>([]);
+  const [reunioes, setReunioes] = useState<Reuniao[]>([]);
   const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
@@ -50,17 +62,20 @@ export function ProfessorDashboard() {
         const profSnap = await getDocs(query(collection(db, "professores"), where("email", "==", user.email)));
 
         if (!profSnap.empty) {
-          const professorId = profSnap.docs[0].id;
+          const profId = profSnap.docs[0].id;
+          setProfessorId(profId);
 
-          const [ciclosSnap, alunosSnap, relSnap] = await Promise.all([
-            getDocs(query(collection(db, "ciclos"), where("professorId", "==", professorId))),
+          const [ciclosSnap, alunosSnap, relSnap, reunioesSnap] = await Promise.all([
+            getDocs(query(collection(db, "ciclos"), where("professorId", "==", profId))),
             getDocs(collection(db, "alunos")),
             getDocs(collection(db, "reports")),
+            getDocs(query(collection(db, "reunioes"), where("professorId", "==", profId))),
           ]);
 
           setCiclos(ciclosSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Ciclo[]);
           setAlunos(alunosSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Aluno[]);
           setRelatorios(relSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Relatorio[]);
+          setReunioes(reunioesSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Reuniao[]);
         }
       } catch (err) {
         console.error("Erro ao buscar dados:", err);
@@ -105,19 +120,35 @@ export function ProfessorDashboard() {
     return new Date(iso).toLocaleDateString("pt-BR");
   };
 
-  // Badge de status para o professor
+  // Ordena reuniões: futuras primeiro, passadas depois
+  const reunioesOrdenadas = [...reunioes].sort((a, b) => {
+    const parseData = (r: Reuniao) => {
+      const [d, m, y] = r.data.split("/");
+      return new Date(`${y}-${m}-${d}T${r.hora}`).getTime();
+    };
+    return parseData(a) - parseData(b);
+  });
+
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+
+  const reunioesFuturas = reunioesOrdenadas.filter(r => {
+    const [d, m, y] = r.data.split("/");
+    return new Date(`${y}-${m}-${d}T00:00:00`) >= hoje;
+  });
+
+  const reunioesPassadas = reunioesOrdenadas.filter(r => {
+    const [d, m, y] = r.data.split("/");
+    return new Date(`${y}-${m}-${d}T00:00:00`) < hoje;
+  });
+
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case "draft":
-        return { label: "Rascunho", bg: "#F3F4F6", color: "#6B7280" };
-      case "published":
-        return { label: "Aguardando revisão", bg: "#EDE9FE", color: "#7C3AED" };
-      case "revisao_solicitada":
-        return { label: "Revisar!", bg: "#FEE2E2", color: "#DC2626" };
-      case "aprovado":
-        return { label: "Aprovado", bg: "#D1FAE5", color: "#065F46" };
-      default:
-        return { label: "Não iniciado", bg: "#F3F4F6", color: "#9CA3AF" };
+      case "draft":             return { label: "Rascunho",          bg: "#F3F4F6", color: "#6B7280" };
+      case "published":         return { label: "Aguardando revisão",bg: "#EDE9FE", color: "#7C3AED" };
+      case "revisao_solicitada":return { label: "Revisar!",          bg: "#FEE2E2", color: "#DC2626" };
+      case "aprovado":          return { label: "Aprovado",          bg: "#D1FAE5", color: "#065F46" };
+      default:                  return { label: "Não iniciado",      bg: "#F3F4F6", color: "#9CA3AF" };
     }
   };
 
@@ -147,11 +178,13 @@ export function ProfessorDashboard() {
       <main className="max-w-6xl mx-auto px-6 py-8">
         <h1 className="text-2xl font-bold text-[#070738] mb-6">Dashboard do Professor</h1>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+        {/* Cards de resumo */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
             { label: "Relatórios pendentes", value: totalRelatorios - totalPublicados, icon: FileText },
             { label: "Publicados", value: totalPublicados, icon: CheckCircle },
             { label: "Ciclos atrasados", value: totalAtrasados, icon: AlertTriangle },
+            { label: "Reuniões agendadas", value: reunioesFuturas.length, icon: CalendarCheck },
           ].map(({ label, value, icon: Icon }) => (
             <div key={label} className="bg-white rounded-xl p-5 border border-[#E5E7EB]">
               <div className="flex items-center justify-between mb-2">
@@ -168,151 +201,207 @@ export function ProfessorDashboard() {
             <div className="w-10 h-10 border-4 border-[#EC5800] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
             <p className="text-[#6B7280]">Carregando ciclos...</p>
           </div>
-        ) : ciclos.length === 0 ? (
-          <div className="bg-white rounded-xl border border-[#E5E7EB] p-12 text-center">
-            <Calendar size={48} className="mx-auto mb-4 text-[#E5E7EB]" />
-            <p className="text-[#6B7280]">Nenhum ciclo atribuído ainda.</p>
-            <p className="text-sm text-[#9CA3AF] mt-1">A secretaria criará um ciclo quando houver relatórios para fazer.</p>
-          </div>
         ) : (
-          <div className="space-y-6">
-            {ciclos.map(ciclo => {
-              const prazo = getStatusDeadline(ciclo.deadline);
-              const publicados = ciclo.alunoIds.filter(id => {
-                const s = getRelatorio(id, ciclo.periodo)?.status;
-                return s === "published" || s === "aprovado";
-              }).length;
-              const pct = ciclo.alunoIds.length > 0 ? Math.round((publicados / ciclo.alunoIds.length) * 100) : 0;
+          <>
+            {/* Seção de Reuniões */}
+            {reunioes.length > 0 && (
+              <div className="mb-8">
+                <h2 className="text-lg font-bold text-[#070738] mb-4 flex items-center gap-2">
+                  <CalendarCheck size={20} className="text-[#8B5CF6]" />
+                  Reuniões com Responsáveis
+                </h2>
 
-              return (
-                <div key={ciclo.id} className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
-                  <div className="px-6 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
-                    <div>
-                      <h2 className="font-bold text-[#070738]">{ciclo.turma} — {ciclo.periodo}</h2>
-                      <div className="flex items-center gap-4 mt-1">
-                        <span className="text-xs text-[#6B7280] flex items-center gap-1">
-                          <Calendar size={12} /> Criado em {formatarData(ciclo.criadoEm)}
-                        </span>
-                        <span className="text-xs text-[#6B7280]">
-                          Prazo: {new Date(ciclo.deadline).toLocaleDateString("pt-BR")}
-                        </span>
+                {reunioesFuturas.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs font-semibold uppercase mb-2" style={{ color: "#9CA3AF" }}>Próximas</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {reunioesFuturas.map(r => (
+                        <div key={r.id} className="bg-white rounded-xl border border-[#E5E7EB] p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-2 h-2 rounded-full bg-[#10B981]" />
+                            <span className="text-xs font-semibold text-[#10B981] uppercase">Agendada</span>
+                          </div>
+                          <p className="font-semibold text-[#070738] text-sm mb-1">{r.aluno}</p>
+                          <p className="text-xs text-[#6B7280] mb-2">Responsável: {r.nomePai}</p>
+                          <div className="flex items-center gap-3 pt-2 border-t border-[#F3F4F6]">
+                            <span className="flex items-center gap-1 text-sm font-bold text-[#EC5800]">
+                              <Calendar size={13} /> {r.data}
+                            </span>
+                            <span className="flex items-center gap-1 text-sm text-[#6B7280]">
+                              <Clock size={13} /> {r.hora}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {reunioesPassadas.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase mb-2" style={{ color: "#9CA3AF" }}>Realizadas</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {reunioesPassadas.map(r => (
+                        <div key={r.id} className="bg-white rounded-xl border border-[#E5E7EB] p-4 opacity-60">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-2 h-2 rounded-full bg-[#9CA3AF]" />
+                            <span className="text-xs font-semibold text-[#9CA3AF] uppercase">Realizada</span>
+                          </div>
+                          <p className="font-semibold text-[#070738] text-sm mb-1">{r.aluno}</p>
+                          <p className="text-xs text-[#6B7280] mb-2">Responsável: {r.nomePai}</p>
+                          <div className="flex items-center gap-3 pt-2 border-t border-[#F3F4F6]">
+                            <span className="flex items-center gap-1 text-sm font-bold text-[#6B7280]">
+                              <Calendar size={13} /> {r.data}
+                            </span>
+                            <span className="flex items-center gap-1 text-sm text-[#6B7280]">
+                              <Clock size={13} /> {r.hora}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Ciclos */}
+            {ciclos.length === 0 ? (
+              <div className="bg-white rounded-xl border border-[#E5E7EB] p-12 text-center">
+                <Calendar size={48} className="mx-auto mb-4 text-[#E5E7EB]" />
+                <p className="text-[#6B7280]">Nenhum ciclo atribuído ainda.</p>
+                <p className="text-sm text-[#9CA3AF] mt-1">A secretaria criará um ciclo quando houver relatórios para fazer.</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {ciclos.map(ciclo => {
+                  const prazo = getStatusDeadline(ciclo.deadline);
+                  const publicados = ciclo.alunoIds.filter(id => {
+                    const s = getRelatorio(id, ciclo.periodo)?.status;
+                    return s === "published" || s === "aprovado";
+                  }).length;
+                  const pct = ciclo.alunoIds.length > 0 ? Math.round((publicados / ciclo.alunoIds.length) * 100) : 0;
+
+                  return (
+                    <div key={ciclo.id} className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
+                      <div className="px-6 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
+                        <div>
+                          <h2 className="font-bold text-[#070738]">{ciclo.turma} — {ciclo.periodo}</h2>
+                          <div className="flex items-center gap-4 mt-1">
+                            <span className="text-xs text-[#6B7280] flex items-center gap-1">
+                              <Calendar size={12} /> Criado em {formatarData(ciclo.criadoEm)}
+                            </span>
+                            <span className="text-xs text-[#6B7280]">
+                              Prazo: {new Date(ciclo.deadline).toLocaleDateString("pt-BR")}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium"
+                            style={{ backgroundColor: prazo.bg, color: prazo.color }}>
+                            {prazo.icon} {prazo.label}
+                          </span>
+                          <span className="text-sm font-medium text-[#6B7280]">{publicados}/{ciclo.alunoIds.length} publicados</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium"
-                        style={{ backgroundColor: prazo.bg, color: prazo.color }}>
-                        {prazo.icon} {prazo.label}
-                      </span>
-                      <span className="text-sm font-medium text-[#6B7280]">{publicados}/{ciclo.alunoIds.length} publicados</span>
-                    </div>
-                  </div>
 
-                  <div className="px-6 py-2 bg-[#F9FAFB]">
-                    <div className="w-full h-1.5 rounded-full bg-[#E5E7EB]">
-                      <div className="h-1.5 rounded-full transition-all"
-                        style={{ width: `${pct}%`, backgroundColor: pct === 100 ? "#10B981" : "#EC5800" }} />
-                    </div>
-                  </div>
+                      <div className="px-6 py-2 bg-[#F9FAFB]">
+                        <div className="w-full h-1.5 rounded-full bg-[#E5E7EB]">
+                          <div className="h-1.5 rounded-full transition-all"
+                            style={{ width: `${pct}%`, backgroundColor: pct === 100 ? "#10B981" : "#EC5800" }} />
+                        </div>
+                      </div>
 
-                  <table className="w-full">
-                    <thead className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
-                      <tr>
-                        {["Aluno", "Turma", "Tipo", "Status", "Ações"].map(h => (
-                          <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-[#6B7280] uppercase">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#F3F4F6]">
-                      {ciclo.alunoIds.map((alunoId, i) => {
-                        const aluno = getAluno(alunoId);
-                        const relatorio = getRelatorio(alunoId, ciclo.periodo);
-                        const status = relatorio?.status;
-                        const isDraft = status === "draft";
-                        const isPublished = status === "published";
-                        const isRevisao = status === "revisao_solicitada";
-                        const isAprovado = status === "aprovado";
-                        const badge = relatorio ? getStatusBadge(status!) : getStatusBadge("none");
-
-                        return (
-                          <tr key={alunoId} className="hover:bg-[#F9FAFB]">
-                            <td className="px-6 py-4 text-sm font-medium text-[#111827]">
-                              {aluno?.nome || ciclo.alunosNomes[i]}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-[#6B7280]">{aluno?.turma || ciclo.turma}</td>
-                            <td className="px-6 py-4 text-sm text-[#6B7280]">{aluno?.tipo || "—"}</td>
-                            <td className="px-6 py-4">
-                              <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium w-fit"
-                                style={{ backgroundColor: badge.bg, color: badge.color }}>
-                                {isAprovado && <Lock size={11} />}
-                                {badge.label}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-2">
-
-                                {/* Aprovado: só Ver, travado */}
-                                {isAprovado && (
-                                  <button onClick={() => navigate("/report/view/" + relatorio!.id)}
-                                    className="bg-[#070738] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                                    <Eye size={14} /> Ver
-                                  </button>
-                                )}
-
-                                {/* Publicado aguardando revisão: só Ver */}
-                                {isPublished && (
-                                  <button onClick={() => navigate("/report/view/" + relatorio!.id)}
-                                    className="bg-[#7C3AED] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                                    <Eye size={14} /> Ver
-                                  </button>
-                                )}
-
-                                {/* Revisão solicitada: Editar + Ver */}
-                                {isRevisao && (
-                                  <>
-                                    <button onClick={() => navigate("/report/create/" + alunoId + "/" + relatorio!.id + "?period=" + encodeURIComponent(ciclo.periodo))}
-                                      className="bg-[#DC2626] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                                      <Pencil size={14} /> Revisar
-                                    </button>
-                                    <button onClick={() => navigate("/report/view/" + relatorio!.id)}
-                                      className="bg-[#F3F4F6] text-[#6B7280] px-3 py-2 rounded-lg text-sm flex items-center gap-2">
-                                      <Eye size={14} />
-                                    </button>
-                                  </>
-                                )}
-
-                                {/* Rascunho: Continuar + Excluir */}
-                                {isDraft && (
-                                  <>
-                                    <button onClick={() => navigate("/report/create/" + alunoId + "/" + relatorio!.id + "?period=" + encodeURIComponent(ciclo.periodo))}
-                                      className="bg-[#F59E0B] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                                      <Pencil size={14} /> Continuar
-                                    </button>
-                                    <button onClick={() => handleExcluirDraft(relatorio!.id)}
-                                      className="bg-[#FEE2E2] text-[#DC2626] px-3 py-2 rounded-lg text-sm flex items-center gap-2 hover:bg-[#DC2626] hover:text-white transition-colors">
-                                      <Trash2 size={14} />
-                                    </button>
-                                  </>
-                                )}
-
-                                {/* Sem relatório: Criar */}
-                                {!relatorio && (
-                                  <button onClick={() => navigate("/report/create/" + alunoId + "?period=" + encodeURIComponent(ciclo.periodo))}
-                                    className="bg-[#EC5800] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                                    <Plus size={14} /> Criar
-                                  </button>
-                                )}
-
-                              </div>
-                            </td>
+                      <table className="w-full">
+                        <thead className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
+                          <tr>
+                            {["Aluno", "Turma", "Tipo", "Status", "Ações"].map(h => (
+                              <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-[#6B7280] uppercase">{h}</th>
+                            ))}
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })}
-          </div>
+                        </thead>
+                        <tbody className="divide-y divide-[#F3F4F6]">
+                          {ciclo.alunoIds.map((alunoId, i) => {
+                            const aluno = getAluno(alunoId);
+                            const relatorio = getRelatorio(alunoId, ciclo.periodo);
+                            const status = relatorio?.status;
+                            const isDraft = status === "draft";
+                            const isPublished = status === "published";
+                            const isRevisao = status === "revisao_solicitada";
+                            const isAprovado = status === "aprovado";
+                            const badge = relatorio ? getStatusBadge(status!) : getStatusBadge("none");
+
+                            return (
+                              <tr key={alunoId} className="hover:bg-[#F9FAFB]">
+                                <td className="px-6 py-4 text-sm font-medium text-[#111827]">
+                                  {aluno?.nome || ciclo.alunosNomes[i]}
+                                </td>
+                                <td className="px-6 py-4 text-sm text-[#6B7280]">{aluno?.turma || ciclo.turma}</td>
+                                <td className="px-6 py-4 text-sm text-[#6B7280]">{aluno?.tipo || "—"}</td>
+                                <td className="px-6 py-4">
+                                  <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium w-fit"
+                                    style={{ backgroundColor: badge.bg, color: badge.color }}>
+                                    {isAprovado && <Lock size={11} />}
+                                    {badge.label}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-2">
+                                    {isAprovado && (
+                                      <button onClick={() => navigate("/report/view/" + relatorio!.id)}
+                                        className="bg-[#070738] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                                        <Eye size={14} /> Ver
+                                      </button>
+                                    )}
+                                    {isPublished && (
+                                      <button onClick={() => navigate("/report/view/" + relatorio!.id)}
+                                        className="bg-[#7C3AED] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                                        <Eye size={14} /> Ver
+                                      </button>
+                                    )}
+                                    {isRevisao && (
+                                      <>
+                                        <button onClick={() => navigate("/report/create/" + alunoId + "/" + relatorio!.id + "?period=" + encodeURIComponent(ciclo.periodo))}
+                                          className="bg-[#DC2626] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                                          <Pencil size={14} /> Revisar
+                                        </button>
+                                        <button onClick={() => navigate("/report/view/" + relatorio!.id)}
+                                          className="bg-[#F3F4F6] text-[#6B7280] px-3 py-2 rounded-lg text-sm flex items-center gap-2">
+                                          <Eye size={14} />
+                                        </button>
+                                      </>
+                                    )}
+                                    {isDraft && (
+                                      <>
+                                        <button onClick={() => navigate("/report/create/" + alunoId + "/" + relatorio!.id + "?period=" + encodeURIComponent(ciclo.periodo))}
+                                          className="bg-[#F59E0B] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                                          <Pencil size={14} /> Continuar
+                                        </button>
+                                        <button onClick={() => handleExcluirDraft(relatorio!.id)}
+                                          className="bg-[#FEE2E2] text-[#DC2626] px-3 py-2 rounded-lg text-sm flex items-center gap-2 hover:bg-[#DC2626] hover:text-white transition-colors">
+                                          <Trash2 size={14} />
+                                        </button>
+                                      </>
+                                    )}
+                                    {!relatorio && (
+                                      <button onClick={() => navigate("/report/create/" + alunoId + "?period=" + encodeURIComponent(ciclo.periodo))}
+                                        className="bg-[#EC5800] text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                                        <Plus size={14} /> Criar
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>
