@@ -4,6 +4,8 @@ import { Plus, Edit, ToggleLeft, ToggleRight, X, Eye, EyeOff } from "lucide-reac
 import { db } from "../../firebase";
 import { collection, getDocs, addDoc, updateDoc, doc, query, orderBy } from "firebase/firestore";
 
+const FIREBASE_API_KEY = "AIzaSyBALFFBpqNLMhtNmAXz0wiPIhFVmBz3fPI";
+
 interface Professor {
   id: string;
   nome: string;
@@ -93,7 +95,7 @@ export default function GerenciarProfessores() {
       } else {
         // Novo professor: cria no Firebase Auth via Admin API (Cloud Function)
         // Como não temos acesso ao Admin SDK no client, usamos a API REST do Firebase Auth
-        const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+        const apiKey = FIREBASE_API_KEY;
         const res = await fetch(
           `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
           {
