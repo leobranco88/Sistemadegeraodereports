@@ -2,13 +2,13 @@ import { useState, useEffect } from "react";
 import { Header } from "../components/Header";
 import { ChevronLeft, ChevronRight, Clock, User, BookOpen, CalendarCheck } from "lucide-react";
 import { db } from "../../firebase";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { collection, getDocs, query } from "firebase/firestore";
 
 interface Reuniao {
   id: string;
   cicloId: string;
-  data: string; // "2026-03-15"
-  hora: string; // "09:00"
+  data: string;   // "10/03/2026" — formato salvo pelo AgendarReuniao
+  hora: string;   // "09:00"
   nomePai: string;
   aluno: string;
   reportId: string;
@@ -24,18 +24,33 @@ const MESES = [
 
 const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
+// Converte "10/03/2026" → { dia: 10, mes: 3, ano: 2026 }
+function parsarData(dataStr: string): { dia: number; mes: number; ano: number } | null {
+  if (!dataStr) return null;
+  const partes = dataStr.split("/");
+  if (partes.length === 3) {
+    return { dia: parseInt(partes[0]), mes: parseInt(partes[1]), ano: parseInt(partes[2]) };
+  }
+  // fallback para yyyy-mm-dd
+  const partes2 = dataStr.split("-");
+  if (partes2.length === 3) {
+    return { dia: parseInt(partes2[2]), mes: parseInt(partes2[1]), ano: parseInt(partes2[0]) };
+  }
+  return null;
+}
+
 export default function GerenciarReunioes() {
   const [reunioes, setReunioes] = useState<Reuniao[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [hoje] = useState(new Date());
   const [mesAtual, setMesAtual] = useState(hoje.getMonth());
   const [anoAtual, setAnoAtual] = useState(hoje.getFullYear());
-  const [diaSelecionado, setDiaSelecionado] = useState<string | null>(null);
+  const [diaSelecionado, setDiaSelecionado] = useState<number | null>(null);
 
   useEffect(() => {
     const buscar = async () => {
       try {
-        const snap = await getDocs(query(collection(db, "reunioes"), orderBy("data")));
+        const snap = await getDocs(query(collection(db, "reunioes")));
         setReunioes(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Reuniao[]);
       } catch (err) {
         console.error("Erro ao buscar reuniões:", err);
@@ -58,41 +73,42 @@ export default function GerenciarReunioes() {
     setDiaSelecionado(null);
   };
 
-  // Gera os dias do calendário
   const primeiroDia = new Date(anoAtual, mesAtual, 1).getDay();
   const totalDias = new Date(anoAtual, mesAtual + 1, 0).getDate();
   const celulas = Array(primeiroDia).fill(null).concat(
     Array.from({ length: totalDias }, (_, i) => i + 1)
   );
 
-  // Reuniões por data
-  const reunioesPorData = (dia: number) => {
-    const dataStr = `${anoAtual}-${String(mesAtual + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
-    return reunioes.filter(r => r.data === dataStr);
+  const reunioesPorDia = (dia: number) => {
+    return reunioes.filter(r => {
+      const p = parsarData(r.data);
+      return p && p.dia === dia && p.mes === mesAtual + 1 && p.ano === anoAtual;
+    });
   };
 
   const totalMes = reunioes.filter(r => {
-    const [ano, mes] = r.data.split("-").map(Number);
-    return ano === anoAtual && mes === mesAtual + 1;
+    const p = parsarData(r.data);
+    return p && p.mes === mesAtual + 1 && p.ano === anoAtual;
   }).length;
 
-  const reunioesDiaSelecionado = diaSelecionado
-    ? reunioes.filter(r => r.data === diaSelecionado).sort((a, b) => a.hora.localeCompare(b.hora))
+  const reunioesDiaSelecionado = diaSelecionado !== null
+    ? reunioes
+        .filter(r => {
+          const p = parsarData(r.data);
+          return p && p.dia === diaSelecionado && p.mes === mesAtual + 1 && p.ano === anoAtual;
+        })
+        .sort((a, b) => a.hora.localeCompare(b.hora))
     : [];
 
-  const formatarDataExibicao = (dataStr: string) => {
-    const [ano, mes, dia] = dataStr.split("-");
-    return `${dia}/${mes}/${ano}`;
-  };
-
-  const hojeStr = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
+  const hojeStr = hoje.getDate();
+  const hojemes = hoje.getMonth();
+  const hojeano = hoje.getFullYear();
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#F0F4F8" }}>
       <Header />
       <div className="max-w-6xl mx-auto px-6 py-8">
 
-        {/* Título */}
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold" style={{ color: "#070738" }}>Reuniões com Pais</h1>
@@ -111,7 +127,6 @@ export default function GerenciarReunioes() {
 
           {/* Calendário */}
           <div className="lg:col-span-2 bg-white rounded-xl shadow-sm overflow-hidden">
-            {/* Navegação */}
             <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: "#E5E7EB" }}>
               <button onClick={mesAnterior} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
                 <ChevronLeft size={20} style={{ color: "#6B7280" }} />
@@ -124,7 +139,6 @@ export default function GerenciarReunioes() {
               </button>
             </div>
 
-            {/* Dias da semana */}
             <div className="grid grid-cols-7 border-b" style={{ borderColor: "#E5E7EB" }}>
               {DIAS_SEMANA.map(d => (
                 <div key={d} className="py-3 text-center text-xs font-semibold uppercase"
@@ -132,7 +146,6 @@ export default function GerenciarReunioes() {
               ))}
             </div>
 
-            {/* Grid de dias */}
             {carregando ? (
               <div className="py-16 text-center">
                 <div className="w-8 h-8 border-4 border-[#EC5800] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -143,15 +156,16 @@ export default function GerenciarReunioes() {
                 {celulas.map((dia, idx) => {
                   if (!dia) return <div key={idx} className="h-16 border-b border-r" style={{ borderColor: "#F3F4F6" }} />;
 
-                  const dataStr = `${anoAtual}-${String(mesAtual + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
-                  const reunioesDia = reunioesPorData(dia);
+                  const reunioesDia = reunioesPorDia(dia);
                   const temReunioes = reunioesDia.length > 0;
-                  const isHoje = dataStr === hojeStr;
-                  const isSelecionado = dataStr === diaSelecionado;
+                  const isHoje = dia === hojeStr && mesAtual === hojeano && anoAtual === hojeano
+                    ? true
+                    : dia === hojeStr && mesAtual === hojemes && anoAtual === hojeano;
+                  const isSelecionado = diaSelecionado === dia;
 
                   return (
                     <div key={idx}
-                      onClick={() => temReunioes && setDiaSelecionado(isSelecionado ? null : dataStr)}
+                      onClick={() => temReunioes && setDiaSelecionado(isSelecionado ? null : dia)}
                       className="h-16 border-b border-r flex flex-col items-center justify-start pt-2 gap-1 transition-colors"
                       style={{
                         borderColor: "#F3F4F6",
@@ -178,9 +192,9 @@ export default function GerenciarReunioes() {
             )}
           </div>
 
-          {/* Painel lateral — detalhes do dia */}
+          {/* Painel lateral */}
           <div className="bg-white rounded-xl shadow-sm p-6">
-            {!diaSelecionado ? (
+            {diaSelecionado === null ? (
               <div className="flex flex-col items-center justify-center h-full text-center py-12">
                 <CalendarCheck size={40} style={{ color: "#E5E7EB" }} className="mb-3" />
                 <p className="text-sm font-medium" style={{ color: "#6B7280" }}>Selecione um dia com reuniões</p>
@@ -188,8 +202,8 @@ export default function GerenciarReunioes() {
               </div>
             ) : (
               <div>
-                <h3 className="font-bold mb-4" style={{ color: "#070738" }}>
-                  {formatarDataExibicao(diaSelecionado)}
+                <h3 className="font-bold mb-1" style={{ color: "#070738" }}>
+                  {String(diaSelecionado).padStart(2, "0")}/{String(mesAtual + 1).padStart(2, "0")}/{anoAtual}
                 </h3>
                 <p className="text-xs mb-4" style={{ color: "#9CA3AF" }}>
                   {reunioesDiaSelecionado.length} reunião{reunioesDiaSelecionado.length !== 1 ? "s" : ""}
