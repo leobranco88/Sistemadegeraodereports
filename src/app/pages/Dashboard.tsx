@@ -389,12 +389,22 @@ export default function Dashboard() {
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-1">
-                            <button onClick={() => copiarLink(r.reportLink)}
-                              className="p-2 rounded-lg hover:bg-gray-100 transition-colors" title="Copiar link"
-                              style={{ color: "#8B5CF6" }}><Copy size={16} /></button>
-                            <button onClick={() => enviarWhatsApp(r.studentName, r.reportLink)}
-                              className="p-2 rounded-lg hover:bg-gray-100 transition-colors" title="Enviar WhatsApp"
-                              style={{ color: "#10B981" }}><MessageCircle size={16} /></button>
+                            <button
+                              onClick={() => aprovado && copiarLink(r.reportLink)}
+                              disabled={!aprovado}
+                              className="p-2 rounded-lg transition-colors"
+                              style={{ color: aprovado ? "#8B5CF6" : "#D1D5DB", cursor: aprovado ? "pointer" : "not-allowed" }}
+                              title={aprovado ? "Copiar link" : "Disponível após aprovação"}>
+                              <Copy size={16} />
+                            </button>
+                            <button
+                              onClick={() => aprovado && enviarWhatsApp(r.studentName, r.reportLink)}
+                              disabled={!aprovado}
+                              className="p-2 rounded-lg transition-colors"
+                              style={{ color: aprovado ? "#10B981" : "#D1D5DB", cursor: aprovado ? "pointer" : "not-allowed" }}
+                              title={aprovado ? "Enviar WhatsApp" : "Disponível após aprovação"}>
+                              <MessageCircle size={16} />
+                            </button>
                             <button onClick={() => window.open(r.reportLink, "_blank")}
                               className="p-2 rounded-lg hover:bg-gray-100 transition-colors" title="Ver relatório"
                               style={{ color: "#EC5800" }}><Eye size={16} /></button>
