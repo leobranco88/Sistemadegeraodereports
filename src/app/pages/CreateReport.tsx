@@ -3,7 +3,7 @@ import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { Logo } from "../components/Logo";
 import { Stepper } from "../components/Stepper";
 import { RatingStars } from "../components/RatingStars";
-import { competencyTemplates } from "../data/mockData";
+import { competencyTemplatesByName } from "../data/mockData";
 import { Competency, ClassType, CEFRLevel, Situation } from "../types";
 import { ArrowLeft, ArrowRight, Save, Send, HelpCircle, X, BookOpen } from "lucide-react";
 import { db, auth } from "../../firebase";
@@ -18,10 +18,12 @@ const COMPETENCIES = [
   "Gramática e Vocabulário",
   "Compreensão Auditiva",
   "Leitura e Escrita",
-];
+] as const;
+
+type CompetencyName = typeof COMPETENCIES[number];
 
 // Tooltips explicativos para cada competência
-const COMPETENCY_TOOLTIPS: Record<string, string> = {
+const COMPETENCY_TOOLTIPS: Record<CompetencyName, string> = {
   "Comportamento e Compromisso":
     "Avalie a postura do aluno em sala: respeito, participação, pontualidade e envolvimento nas atividades. Um aluno comprometido aparece preparado e contribui ativamente.",
   "Organização e Responsabilidade":
@@ -36,8 +38,8 @@ const COMPETENCY_TOOLTIPS: Record<string, string> = {
     "Observe habilidades de leitura (interpretação, velocidade) e escrita (clareza, coerência, ortografia). Considere produções em sala e tarefas de casa.",
 };
 
-// Placeholders personalizados por competência para o campo "O que vejo"
-const COMPETENCY_PLACEHOLDERS: Record<string, string> = {
+// Placeholders personalizados por competência
+const COMPETENCY_PLACEHOLDERS: Record<CompetencyName, string> = {
   "Comportamento e Compromisso":
     "Ex: [Nome] demonstra boa postura em sala, participa ativamente das atividades e respeita os colegas. Costuma chegar pontualmente e está sempre disposto(a) a colaborar.",
   "Organização e Responsabilidade":
@@ -52,7 +54,6 @@ const COMPETENCY_PLACEHOLDERS: Record<string, string> = {
     "Ex: [Nome] lê com boa fluência e demonstra compreensão dos textos trabalhados. Nas produções escritas, apresenta clareza de ideia e boa organização dos parágrafos.",
 };
 
-// Conteúdo do modal de ajuda — Competências
 const HELP_CONTENT_COMPETENCIAS = [
   {
     title: "Como avaliar cada competência?",
@@ -64,11 +65,10 @@ const HELP_CONTENT_COMPETENCIAS = [
   },
   {
     title: "Por que importa / O que fazer",
-    body: "Esses campos são preenchidos automaticamente com base na nota. Você pode ajustar escolhendo outra opção no menu. Eles aparecem no relatório para os responsáveis.",
+    body: "Esses campos são preenchidos automaticamente com base na nota e na competência. Você pode ajustar escolhendo outra opção no menu. Eles aparecem no relatório para os responsáveis.",
   },
 ];
 
-// Conteúdo do modal de ajuda — Observações Finais
 const HELP_CONTENT_OBSERVACOES = [
   {
     title: "Voz do Professor",
@@ -131,10 +131,7 @@ function HelpModal({
             <BookOpen className="w-5 h-5 text-[#EC5800]" />
             <h3 className="text-lg font-semibold">{title}</h3>
           </div>
-          <button
-            onClick={onClose}
-            className="text-[#9CA3AF] hover:text-[#3D3D3D] transition-colors"
-          >
+          <button onClick={onClose} className="text-[#9CA3AF] hover:text-[#3D3D3D] transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -155,6 +152,17 @@ function HelpModal({
       </div>
     </div>
   );
+}
+
+// Helper — busca frases por competência e nota
+function getTemplates(competencyName: string, rating: number) {
+  const name = competencyName as CompetencyName;
+  const template = competencyTemplatesByName[name];
+  if (!template) return { whyItMatters: [""], whatToDo: [""] };
+  return {
+    whyItMatters: template.whyItMatters[rating] ?? [""],
+    whatToDo: template.whatToDo[rating] ?? [""],
+  };
 }
 
 export function CreateReport() {
@@ -183,14 +191,17 @@ export function CreateReport() {
   const [cefrLevel, setCefrLevel] = useState<CEFRLevel>("B1");
 
   const [competencies, setCompetencies] = useState<Competency[]>(
-    COMPETENCIES.map((name, index) => ({
-      id: String(index + 1),
-      name,
-      rating: 3,
-      whatISee: "",
-      whyItMatters: competencyTemplates.whyItMatters[3][0],
-      whatToDo: competencyTemplates.whatToDo[3][0],
-    }))
+    COMPETENCIES.map((name, index) => {
+      const t = getTemplates(name, 3);
+      return {
+        id: String(index + 1),
+        name,
+        rating: 3,
+        whatISee: "",
+        whyItMatters: t.whyItMatters[0],
+        whatToDo: t.whatToDo[0],
+      };
+    })
   );
 
   const [professorVoice, setProfessorVoice] = useState("");
@@ -297,13 +308,15 @@ export function CreateReport() {
     ...(cicloId && { cicloId }),
   });
 
+  // Atualiza nota + frases específicas da competência
   const updateCompetencyRating = (index: number, rating: number) => {
     const updated = [...competencies];
+    const t = getTemplates(updated[index].name, rating);
     updated[index] = {
       ...updated[index],
       rating,
-      whyItMatters: competencyTemplates.whyItMatters[rating][0],
-      whatToDo: competencyTemplates.whatToDo[rating][0],
+      whyItMatters: t.whyItMatters[0],
+      whatToDo: t.whatToDo[0],
     };
     setCompetencies(updated);
   };
@@ -379,7 +392,6 @@ export function CreateReport() {
 
   return (
     <div className="min-h-screen bg-[#F0F4F8]">
-      {/* Modal de ajuda */}
       {showHelpModal && (
         <HelpModal
           title={currentStep === 2 ? "Como preencher as Competências" : "Como preencher as Observações"}
@@ -410,7 +422,6 @@ export function CreateReport() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-start justify-between mb-2">
           <h1 className="text-3xl text-[#070738]">{reportId ? "Continuar Rascunho" : "Criar Relatório"}</h1>
-          {/* Botão de ajuda visível nas etapas de Competências e Observações */}
           {(currentStep === 2 || currentStep === 3) && (
             <button
               onClick={() => setShowHelpModal(true)}
@@ -428,7 +439,8 @@ export function CreateReport() {
         <Stepper steps={STEPS} currentStep={currentStep} />
 
         <div className="bg-white rounded-xl shadow-sm p-8 mb-6">
-          {/* STEP 0 — Dados Gerais (sem alterações) */}
+
+          {/* STEP 0 — Dados Gerais */}
           {currentStep === 0 && (
             <div className="space-y-6">
               <h2 className="text-2xl text-[#070738] mb-6">Dados Gerais</h2>
@@ -486,7 +498,7 @@ export function CreateReport() {
             </div>
           )}
 
-          {/* STEP 1 — Dados Quantitativos (sem alterações) */}
+          {/* STEP 1 — Dados Quantitativos */}
           {currentStep === 1 && (
             <div className="space-y-6">
               <h2 className="text-2xl text-[#070738] mb-6">Dados Quantitativos</h2>
@@ -526,14 +538,11 @@ export function CreateReport() {
             </div>
           )}
 
-          {/* STEP 2 — Competências COM tooltips e placeholders */}
+          {/* STEP 2 — Competências */}
           {currentStep === 2 && (
             <div className="space-y-8">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl text-[#070738]">Avaliação por Competências</h2>
-              </div>
+              <h2 className="text-2xl text-[#070738] mb-6">Avaliação por Competências</h2>
 
-              {/* Banner de dica rápida */}
               <div className="bg-[#FFF7ED] border border-[#FED7AA] rounded-lg px-4 py-3 flex items-start gap-3 text-sm text-[#92400E]">
                 <HelpCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-[#EC5800]" />
                 <span>
@@ -541,54 +550,61 @@ export function CreateReport() {
                 </span>
               </div>
 
-              {competencies.map((comp, index) => (
-                <div key={comp.id} className="border border-gray-200 rounded-lg p-6 space-y-4">
-                  <h3 className="text-lg text-[#070738] flex items-center">
-                    {comp.name}
-                    <Tooltip text={COMPETENCY_TOOLTIPS[comp.name] || ""} />
-                  </h3>
-                  <div>
-                    <label className="block text-sm text-[#3D3D3D] mb-3">Nota (1-5)</label>
-                    <RatingStars rating={comp.rating} onChange={(rating) => updateCompetencyRating(index, rating)} />
+              {competencies.map((comp, index) => {
+                const t = getTemplates(comp.name, comp.rating);
+                return (
+                  <div key={comp.id} className="border border-gray-200 rounded-lg p-6 space-y-4">
+                    <h3 className="text-lg text-[#070738] flex items-center">
+                      {comp.name}
+                      <Tooltip text={COMPETENCY_TOOLTIPS[comp.name as CompetencyName] || ""} />
+                    </h3>
+                    <div>
+                      <label className="block text-sm text-[#3D3D3D] mb-3">Nota (1-5)</label>
+                      <RatingStars rating={comp.rating} onChange={(rating) => updateCompetencyRating(index, rating)} />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-[#3D3D3D] mb-2">O que vejo</label>
+                      <textarea
+                        value={comp.whatISee}
+                        onChange={(e) => updateCompetencyField(index, "whatISee", e.target.value)}
+                        className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800] min-h-[100px] text-sm"
+                        placeholder={COMPETENCY_PLACEHOLDERS[comp.name as CompetencyName] || "Descreva suas observações..."}
+                      />
+                      <p className="text-xs text-[#9CA3AF] mt-1">
+                        Substitua [Nome] pelo nome do aluno. Este texto aparecerá no relatório do responsável.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-[#3D3D3D] mb-2">Por que importa</label>
+                      <select
+                        value={comp.whyItMatters}
+                        onChange={(e) => updateCompetencyField(index, "whyItMatters", e.target.value)}
+                        className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800]"
+                      >
+                        {t.whyItMatters.map((text, i) => (
+                          <option key={i} value={text}>{text}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-[#3D3D3D] mb-2">O que fazer</label>
+                      <select
+                        value={comp.whatToDo}
+                        onChange={(e) => updateCompetencyField(index, "whatToDo", e.target.value)}
+                        className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800]"
+                      >
+                        {t.whatToDo.map((text, i) => (
+                          <option key={i} value={text}>{text}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm text-[#3D3D3D] mb-2">O que vejo</label>
-                    <textarea
-                      value={comp.whatISee}
-                      onChange={(e) => updateCompetencyField(index, "whatISee", e.target.value)}
-                      className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800] min-h-[100px] text-sm"
-                      placeholder={COMPETENCY_PLACEHOLDERS[comp.name] || "Descreva suas observações..."}
-                    />
-                    <p className="text-xs text-[#9CA3AF] mt-1">
-                      Substitua [Nome] pelo nome do aluno. Este texto aparecerá no relatório do responsável.
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-[#3D3D3D] mb-2">Por que importa</label>
-                    <select value={comp.whyItMatters}
-                      onChange={(e) => updateCompetencyField(index, "whyItMatters", e.target.value)}
-                      className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800]">
-                      {competencyTemplates.whyItMatters[comp.rating].map((text, i) => (
-                        <option key={i} value={text}>{text}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-[#3D3D3D] mb-2">O que fazer</label>
-                    <select value={comp.whatToDo}
-                      onChange={(e) => updateCompetencyField(index, "whatToDo", e.target.value)}
-                      className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800]">
-                      {competencyTemplates.whatToDo[comp.rating].map((text, i) => (
-                        <option key={i} value={text}>{text}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
-          {/* STEP 3 — Observações Finais COM placeholders e dicas */}
+          {/* STEP 3 — Observações Finais */}
           {currentStep === 3 && (
             <div className="space-y-6">
               <h2 className="text-2xl text-[#070738] mb-6">Observações Finais</h2>
@@ -657,7 +673,7 @@ export function CreateReport() {
             </div>
           )}
 
-          {/* STEP 4 — Revisão (sem alterações) */}
+          {/* STEP 4 — Revisão */}
           {currentStep === 4 && (
             <div className="space-y-6">
               <h2 className="text-2xl text-[#070738] mb-6">Revisão Final</h2>
@@ -686,6 +702,7 @@ export function CreateReport() {
               </div>
             </div>
           )}
+
         </div>
 
         <div className="flex justify-between items-center">
