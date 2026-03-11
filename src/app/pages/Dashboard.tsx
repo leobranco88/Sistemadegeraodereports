@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Header } from "../components/Header";
-import { Copy, MessageCircle, Eye, Filter, AlertTriangle, Clock, CheckCircle, Trash2, ThumbsUp, RotateCcw, Lock } from "lucide-react";
+import { Copy, MessageCircle, Eye, Filter, AlertTriangle, Clock, CheckCircle, Trash2, ThumbsUp, RotateCcw, Lock, FlaskConical, FileText, BadgeCheck, Send } from "lucide-react";
 import { db } from "../../firebase";
 import { collection, getDocs, orderBy, query, deleteDoc, doc, updateDoc } from "firebase/firestore";
 
@@ -23,9 +23,18 @@ interface Ciclo {
   professorNome: string;
   periodo: string;
   deadline: string;
+  dataProva?: string;
   alunoIds: string[];
   alunosNomes: string[];
+  status?: "ativo" | "teste_aplicado" | "relatorios_pendentes" | "agendamentos_abertos";
 }
+
+const STATUS_CICLO_CONFIG = {
+  ativo:                { label: "Em andamento",          bg: "#DBEAFE", color: "#1D4ED8" },
+  teste_aplicado:       { label: "Teste aplicado",        bg: "#FEF3C7", color: "#92400E" },
+  relatorios_pendentes: { label: "Prontos p/ relatórios", bg: "#EDE9FE", color: "#5B21B6" },
+  agendamentos_abertos: { label: "Agendamentos abertos",  bg: "#D1FAE5", color: "#065F46" },
+};
 
 export default function Dashboard() {
   const [relatorios, setRelatorios] = useState<Relatorio[]>([]);
@@ -95,12 +104,32 @@ export default function Dashboard() {
     }
   };
 
-  const getProgressoCiclo = (ciclo: Ciclo) => {
+  // Retorna etapa do relatório de um aluno: 0=sem relatório, 1=rascunho, 2=aguardando revisão, 3=revisão solicitada, 4=aprovado, 5=publicado
+  const getEtapaAluno = (alunoId: string, periodo: string): { etapa: number; label: string; bg: string; color: string } => {
+    const rel = relatorios.find(r => r.studentId === alunoId && r.period === periodo);
+    if (!rel) return { etapa: 0, label: "Sem relatório", bg: "#F3F4F6", color: "#9CA3AF" };
+    switch (rel.status) {
+      case "draft":               return { etapa: 1, label: "Rascunho",           bg: "#F3F4F6", color: "#6B7280" };
+      case "published":           return { etapa: 2, label: "Ag. revisão",        bg: "#EDE9FE", color: "#7C3AED" };
+      case "revisao_solicitada":  return { etapa: 3, label: "Revisão solicitada", bg: "#FEE2E2", color: "#DC2626" };
+      case "aprovado":            return { etapa: 4, label: "Aprovado",           bg: "#D1FAE5", color: "#065F46" };
+      default:                    return { etapa: 0, label: rel.status,           bg: "#F3F4F6", color: "#9CA3AF" };
+    }
+  };
+
+  // Progresso do funil do ciclo
+  const getFunilCiclo = (ciclo: Ciclo) => {
     const total = ciclo.alunoIds.length;
-    const feitos = ciclo.alunoIds.filter(alunoId =>
-      relatorios.some(r => r.studentId === alunoId && r.status === "published" && r.period === ciclo.periodo)
-    ).length;
-    return { feitos, total, pct: total > 0 ? Math.min(Math.round((feitos / total) * 100), 100) : 0 };
+    let semRelatorio = 0, rascunho = 0, aguardando = 0, revisao = 0, aprovado = 0;
+    ciclo.alunoIds.forEach(id => {
+      const { etapa } = getEtapaAluno(id, ciclo.periodo);
+      if (etapa === 0) semRelatorio++;
+      else if (etapa === 1) rascunho++;
+      else if (etapa === 2) aguardando++;
+      else if (etapa === 3) revisao++;
+      else if (etapa >= 4) aprovado++;
+    });
+    return { total, semRelatorio, rascunho, aguardando, revisao, aprovado };
   };
 
   const getStatusDeadline = (deadline: string) => {
@@ -110,6 +139,17 @@ export default function Dashboard() {
     if (diff < 0) return { label: "Atrasado", bg: "#FEE2E2", color: "#DC2626", icon: <AlertTriangle size={14} /> };
     if (diff <= 2) return { label: `${diff}d restantes`, bg: "#FEF3C7", color: "#92400E", icon: <Clock size={14} /> };
     return { label: `${diff}d restantes`, bg: "#D1FAE5", color: "#065F46", icon: <CheckCircle size={14} /> };
+  };
+
+  const getInfoProva = (dataProva?: string) => {
+    if (!dataProva) return null;
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const dataP = new Date(dataProva + "T00:00:00");
+    const diff = Math.ceil((dataP.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+    const label = dataP.toLocaleDateString("pt-BR");
+    if (diff > 0)  return { label: `Prova em ${label} (${diff}d)`, bg: "#DBEAFE", color: "#1D4ED8", realizada: false };
+    if (diff === 0) return { label: `Prova hoje! ${label}`,         bg: "#FEF3C7", color: "#92400E", realizada: false };
+    return           { label: `Prova realizada em ${label}`,        bg: "#D1FAE5", color: "#065F46", realizada: true };
   };
 
   const relatoriosFiltrados = relatorios.filter((r) => {
@@ -140,31 +180,31 @@ export default function Dashboard() {
 
   const getSituacaoLabel = (situation: string) => {
     switch (situation) {
-      case "approved": return "Aprovado(a)";
-      case "in-progress": return "Em Progresso";
-      case "needs-attention": return "Necessita Atenção";
-      case "failed": return "Reprovado(a)";
-      default: return situation;
+      case "approved":       return "Aprovado(a)";
+      case "in-progress":    return "Em Progresso";
+      case "needs-attention":return "Necessita Atenção";
+      case "failed":         return "Reprovado(a)";
+      default:               return situation;
     }
   };
 
   const getSituacaoCor = (situation: string) => {
     switch (situation) {
-      case "approved": return { bg: "#D1FAE5", color: "#065F46" };
-      case "in-progress": return { bg: "#FEF3C7", color: "#92400E" };
+      case "approved":        return { bg: "#D1FAE5", color: "#065F46" };
+      case "in-progress":     return { bg: "#FEF3C7", color: "#92400E" };
       case "needs-attention": return { bg: "#FEE2E2", color: "#DC2626" };
-      case "failed": return { bg: "#F3F4F6", color: "#6B7280" };
-      default: return { bg: "#F3F4F6", color: "#6B7280" };
+      case "failed":          return { bg: "#F3F4F6", color: "#6B7280" };
+      default:                return { bg: "#F3F4F6", color: "#6B7280" };
     }
   };
 
   const getStatusRelatorio = (status: string) => {
     switch (status) {
-      case "draft": return { label: "Rascunho", bg: "#F3F4F6", color: "#6B7280" };
-      case "published": return { label: "Aguardando revisão", bg: "#EDE9FE", color: "#7C3AED" };
-      case "revisao_solicitada": return { label: "Revisão solicitada", bg: "#FEE2E2", color: "#DC2626" };
-      case "aprovado": return { label: "Aprovado", bg: "#D1FAE5", color: "#065F46" };
-      default: return { label: status, bg: "#F3F4F6", color: "#6B7280" };
+      case "draft":              return { label: "Rascunho",          bg: "#F3F4F6", color: "#6B7280" };
+      case "published":          return { label: "Aguardando revisão",bg: "#EDE9FE", color: "#7C3AED" };
+      case "revisao_solicitada": return { label: "Revisão solicitada",bg: "#FEE2E2", color: "#DC2626" };
+      case "aprovado":           return { label: "Aprovado",          bg: "#D1FAE5", color: "#065F46" };
+      default:                   return { label: status,              bg: "#F3F4F6", color: "#6B7280" };
     }
   };
 
@@ -177,45 +217,79 @@ export default function Dashboard() {
         {ciclos.length > 0 && (
           <div className="mb-8">
             <h2 className="text-lg font-bold mb-4" style={{ color: "#573000" }}>Ciclos em Andamento</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               {ciclos.map(ciclo => {
-                const { feitos, total, pct } = getProgressoCiclo(ciclo);
                 const prazo = getStatusDeadline(ciclo.deadline);
-                const concluido = feitos === total;
+                const infoProva = getInfoProva(ciclo.dataProva);
+                const statusCiclo = ciclo.status || "ativo";
+                const statusConfig = STATUS_CICLO_CONFIG[statusCiclo as keyof typeof STATUS_CICLO_CONFIG];
+                const funil = getFunilCiclo(ciclo);
+
                 return (
-                  <div key={ciclo.id} className="bg-white rounded-lg shadow-md p-5">
+                  <div key={ciclo.id} className="bg-white rounded-xl shadow-md p-5">
+
+                    {/* Cabeçalho do card */}
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <p className="font-bold text-sm" style={{ color: "#070738" }}>{ciclo.professorNome}</p>
                         <p className="text-xs mt-0.5" style={{ color: "#6B7280" }}>{ciclo.turma} · {ciclo.periodo}</p>
                       </div>
-                      <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium"
-                        style={{ backgroundColor: prazo.bg, color: prazo.color }}>
-                        {prazo.icon} {prazo.label}
-                      </span>
-                    </div>
-                    <div className="mb-3">
-                      <div className="flex justify-between text-xs mb-1">
-                        <span style={{ color: "#3D3D3D" }}>Publicados</span>
-                        <span className="font-medium" style={{ color: concluido ? "#065F46" : "#EC5800" }}>
-                          {feitos}/{total} ({pct}%)
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="px-2 py-1 rounded-full text-xs font-medium"
+                          style={{ backgroundColor: statusConfig.bg, color: statusConfig.color }}>
+                          {statusConfig.label}
+                        </span>
+                        <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium"
+                          style={{ backgroundColor: prazo.bg, color: prazo.color }}>
+                          {prazo.icon} {prazo.label}
                         </span>
                       </div>
-                      <div className="w-full h-1.5 rounded-full" style={{ backgroundColor: "#F0F4F8" }}>
-                        <div className="h-1.5 rounded-full transition-all"
-                          style={{ width: `${pct}%`, backgroundColor: concluido ? "#10B981" : "#EC5800" }} />
+                    </div>
+
+                    {/* Badge data da prova */}
+                    {infoProva && (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg mb-3 w-fit"
+                        style={{ backgroundColor: infoProva.bg }}>
+                        <FlaskConical size={12} style={{ color: infoProva.color }} />
+                        <span className="text-xs font-medium" style={{ color: infoProva.color }}>
+                          {infoProva.label}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Funil de progresso */}
+                    <div className="mb-4 p-3 rounded-lg" style={{ backgroundColor: "#F8FAFC" }}>
+                      <p className="text-xs font-semibold mb-2" style={{ color: "#3D3D3D" }}>Progresso dos relatórios</p>
+                      <div className="grid grid-cols-4 gap-2 text-center">
+                        {[
+                          { icon: <FileText size={14} />,   label: "Rascunho",  count: funil.rascunho + funil.semRelatorio, color: "#9CA3AF", bg: "#F3F4F6" },
+                          { icon: <Clock size={14} />,      label: "Ag. revisão", count: funil.aguardando + funil.revisao,    color: "#7C3AED", bg: "#EDE9FE" },
+                          { icon: <BadgeCheck size={14} />, label: "Aprovado",  count: funil.aprovado,                       color: "#065F46", bg: "#D1FAE5" },
+                          { icon: <Send size={14} />,       label: "Publicado", count: relatorios.filter(r => ciclo.alunoIds.includes(r.studentId) && r.period === ciclo.periodo && r.status === "published" && r.publishedAt).length, color: "#EC5800", bg: "#FFF7ED" },
+                        ].map((item, i) => (
+                          <div key={i} className="flex flex-col items-center gap-1 px-2 py-2 rounded-lg"
+                            style={{ backgroundColor: item.bg }}>
+                            <span style={{ color: item.color }}>{item.icon}</span>
+                            <span className="text-lg font-bold leading-none" style={{ color: item.color }}>{item.count}</span>
+                            <span className="text-xs leading-tight" style={{ color: item.color }}>{item.label}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-1">
+
+                    {/* Checklist por aluno */}
+                    <div className="flex flex-col gap-1.5">
                       {ciclo.alunosNomes.map((nome, i) => {
-                        const rel = relatorios.find(r => r.studentId === ciclo.alunoIds[i] && r.period === ciclo.periodo);
-                        const publicado = rel?.status === "published" || rel?.status === "aprovado";
+                        const { label, bg, color } = getEtapaAluno(ciclo.alunoIds[i], ciclo.periodo);
                         return (
-                          <span key={i} className="px-2 py-0.5 rounded-full text-xs"
-                            style={{ backgroundColor: publicado ? "#D1FAE5" : "#F3F4F6", color: publicado ? "#065F46" : "#6B7280" }}>
-                            {publicado ? "✓" : "○"} {nome}
-                            {publicado && rel?.publishedAt ? <span style={{ color: "#9CA3AF" }}> · {rel.publishedAt}</span> : null}
-                          </span>
+                          <div key={i} className="flex items-center justify-between px-3 py-1.5 rounded-lg"
+                            style={{ backgroundColor: "#F8FAFC" }}>
+                            <span className="text-sm" style={{ color: "#3D3D3D" }}>{nome}</span>
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium"
+                              style={{ backgroundColor: bg, color }}>
+                              {label}
+                            </span>
+                          </div>
                         );
                       })}
                     </div>
@@ -324,8 +398,6 @@ export default function Dashboard() {
                             <button onClick={() => window.open(r.reportLink, "_blank")}
                               className="p-2 rounded-lg hover:bg-gray-100 transition-colors" title="Ver relatório"
                               style={{ color: "#EC5800" }}><Eye size={16} /></button>
-
-                            {/* Botões de revisão — só para published */}
                             {podeAvaliar && (
                               <>
                                 <button onClick={() => handleAprovar(r.id, r.studentName)}
@@ -336,8 +408,6 @@ export default function Dashboard() {
                                   style={{ color: "#92400E" }}><RotateCcw size={16} /></button>
                               </>
                             )}
-
-                            {/* Excluir — não aparece para aprovados */}
                             {!aprovado && (
                               <button onClick={() => handleExcluir(r.id, r.studentName)}
                                 className="p-2 rounded-lg hover:bg-red-50 transition-colors" title="Excluir relatório"
