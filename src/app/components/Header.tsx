@@ -1,4 +1,4 @@
-import { LogOut, Calendar, Users, LayoutDashboard, GraduationCap, RefreshCw } from "lucide-react";
+import { LogOut, Calendar, Users, LayoutDashboard, GraduationCap, RefreshCw, CalendarCheck } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "../../firebase";
@@ -8,6 +8,7 @@ export function Header() {
   const navigate = useNavigate();
   const location = useLocation();
   const handleLogout = async () => { await signOut(auth); navigate("/"); };
+
   return (
     <header className="border-b" style={{ backgroundColor: "#FFFFFF", borderColor: "#E5E7EB" }}>
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -21,7 +22,7 @@ export function Header() {
             { path: "/secretaria/alunos", label: "Alunos", icon: <GraduationCap size={20} /> },
             { path: "/secretaria/professores", label: "Professores", icon: <Users size={20} /> },
             { path: "/secretaria/ciclos", label: "Ciclos", icon: <RefreshCw size={20} /> },
-            { path: "/secretaria/horarios", label: "Horários", icon: <Calendar size={20} /> },
+            { path: "/secretaria/reunioes", label: "Reuniões", icon: <CalendarCheck size={20} /> },
           ].map(({ path, label, icon }) => (
             <button key={path} onClick={() => navigate(path)}
               className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-gray-100 transition-colors"
