@@ -349,3 +349,30 @@ export const competencyTemplates = {
     5: comportamento.whatToDo[5],
   },
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOCK DATA — usado pelo CoordinatorDashboard como dados de demonstração
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const mockStudents = [
+  { id: "s1", name: "Ana Beatriz Silva",    class: "Kids 1",   classType: "regular",   status: "meeting-scheduled" },
+  { id: "s2", name: "Carlos Eduardo Lima",  class: "Kids 1",   classType: "regular",   status: "confirmed" },
+  { id: "s3", name: "Fernanda Costa",       class: "Kids 1",   classType: "regular",   status: "sent" },
+  { id: "s4", name: "Gabriel Souza",        class: "Teens 2",  classType: "regular",   status: "completed" },
+  { id: "s5", name: "Isabela Martins",      class: "Teens 2",  classType: "regular",   status: "in-progress" },
+  { id: "s6", name: "João Pedro Alves",     class: "Teens 2",  classType: "regular",   status: "not-started" },
+  { id: "s7", name: "Larissa Oliveira",     class: "Adults 1", classType: "intensive", status: "confirmed" },
+  { id: "s8", name: "Matheus Ferreira",     class: "Adults 1", classType: "intensive", status: "meeting-scheduled" },
+  { id: "s9", name: "Natália Rodrigues",    class: "Adults 1", classType: "regular",   status: "sent" },
+];
+
+export const mockReports = [
+  { id: "r1", studentId: "s1", professorName: "Lívia Vieira Brito",    status: "meeting-scheduled" },
+  { id: "r2", studentId: "s2", professorName: "Lívia Vieira Brito",    status: "confirmed" },
+  { id: "r3", studentId: "s3", professorName: "Lívia Vieira Brito",    status: "sent" },
+  { id: "r4", studentId: "s4", professorName: "Leonardo Branco Costa", status: "completed" },
+  { id: "r5", studentId: "s5", professorName: "Leonardo Branco Costa", status: "in-progress" },
+  { id: "r7", studentId: "s7", professorName: "Leonardo Branco Costa", status: "confirmed" },
+  { id: "r8", studentId: "s8", professorName: "Leonardo Branco Costa", status: "meeting-scheduled" },
+  { id: "r9", studentId: "s9", professorName: "Leonardo Branco Costa", status: "sent" },
+];
