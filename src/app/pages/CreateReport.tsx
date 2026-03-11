@@ -5,7 +5,7 @@ import { Stepper } from "../components/Stepper";
 import { RatingStars } from "../components/RatingStars";
 import { competencyTemplates } from "../data/mockData";
 import { Competency, ClassType, CEFRLevel, Situation } from "../types";
-import { ArrowLeft, ArrowRight, Save, Send } from "lucide-react";
+import { ArrowLeft, ArrowRight, Save, Send, HelpCircle, X, BookOpen } from "lucide-react";
 import { db, auth } from "../../firebase";
 import { collection, addDoc, getDocs, getDoc, updateDoc, query, where, serverTimestamp, doc } from "firebase/firestore";
 
@@ -20,11 +20,141 @@ const COMPETENCIES = [
   "Leitura e Escrita",
 ];
 
+// Tooltips explicativos para cada competência
+const COMPETENCY_TOOLTIPS: Record<string, string> = {
+  "Comportamento e Compromisso":
+    "Avalie a postura do aluno em sala: respeito, participação, pontualidade e envolvimento nas atividades. Um aluno comprometido aparece preparado e contribui ativamente.",
+  "Organização e Responsabilidade":
+    "Observe se o aluno traz o material, entrega tarefas no prazo e mantém o caderno/livro organizados. Responsabilidade reflete maturidade no processo de aprendizado.",
+  "Fala e Comunicação":
+    "Avalie a disposição do aluno para se expressar em inglês, mesmo cometendo erros. Considere fluência, pronúncia, confiança e uso de vocabulário adequado.",
+  "Gramática e Vocabulário":
+    "Observe a precisão gramatical nas produções orais e escritas, e a variedade de vocabulário utilizado. Considere o nível esperado para a turma.",
+  "Compreensão Auditiva":
+    "Avalie a capacidade do aluno de entender instruções, diálogos e áudios em inglês. Inclui compreensão de diferentes sotaques e velocidades de fala.",
+  "Leitura e Escrita":
+    "Observe habilidades de leitura (interpretação, velocidade) e escrita (clareza, coerência, ortografia). Considere produções em sala e tarefas de casa.",
+};
+
+// Placeholders personalizados por competência para o campo "O que vejo"
+const COMPETENCY_PLACEHOLDERS: Record<string, string> = {
+  "Comportamento e Compromisso":
+    "Ex: [Nome] demonstra boa postura em sala, participa ativamente das atividades e respeita os colegas. Costuma chegar pontualmente e está sempre disposto(a) a colaborar.",
+  "Organização e Responsabilidade":
+    "Ex: [Nome] traz o material completo regularmente e entrega as tarefas dentro do prazo. Mantém o caderno organizado e demonstra autonomia no gerenciamento das atividades.",
+  "Fala e Comunicação":
+    "Ex: [Nome] demonstra boa confiança ao se expressar em inglês, utilizando vocabulário variado. Comete alguns erros gramaticais, mas a comunicação é clara e eficaz.",
+  "Gramática e Vocabulário":
+    "Ex: [Nome] aplica bem as estruturas gramaticais do nível, com uso crescente de vocabulário. Apresenta boa consistência nas produções escritas e orais.",
+  "Compreensão Auditiva":
+    "Ex: [Nome] compreende bem as instruções em inglês e acompanha os áudios do livro com facilidade. Demonstra boa capacidade de inferir significado pelo contexto.",
+  "Leitura e Escrita":
+    "Ex: [Nome] lê com boa fluência e demonstra compreensão dos textos trabalhados. Nas produções escritas, apresenta clareza de ideia e boa organização dos parágrafos.",
+};
+
+// Conteúdo do modal de ajuda — Competências
+const HELP_CONTENT_COMPETENCIAS = [
+  {
+    title: "Como avaliar cada competência?",
+    body: "Use a escala de 1 a 5 estrelas: 1 = Precisa de muita atenção, 2 = Em desenvolvimento, 3 = Dentro do esperado, 4 = Acima do esperado, 5 = Excelente.",
+  },
+  {
+    title: "O que escrever em \"O que vejo\"?",
+    body: "Descreva comportamentos e situações reais observadas em sala. Seja específico(a) — mencione o nome do aluno e exemplos concretos. Evite frases genéricas como \"é um bom aluno\".",
+  },
+  {
+    title: "Por que importa / O que fazer",
+    body: "Esses campos são preenchidos automaticamente com base na nota. Você pode ajustar escolhendo outra opção no menu. Eles aparecem no relatório para os responsáveis.",
+  },
+];
+
+// Conteúdo do modal de ajuda — Observações Finais
+const HELP_CONTENT_OBSERVACOES = [
+  {
+    title: "Voz do Professor",
+    body: "Escreva uma mensagem pessoal e encorajadora direcionada ao aluno e à família. Mencione conquistas do período, momentos marcantes e o potencial que você enxerga. Tom: caloroso e motivador.",
+  },
+  {
+    title: "Foco do Ciclo",
+    body: "Descreva qual foi o objetivo pedagógico principal deste ciclo — o que a turma trabalhou, quais habilidades foram priorizadas e o que foi alcançado coletivamente ou individualmente.",
+  },
+];
+
 interface Aluno {
   id: string;
   nome: string;
   turma: string;
   tipo: string;
+}
+
+// Componente Tooltip
+function Tooltip({ text }: { text: string }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <span className="relative inline-flex items-center ml-1">
+      <button
+        type="button"
+        onMouseEnter={() => setVisible(true)}
+        onMouseLeave={() => setVisible(false)}
+        onFocus={() => setVisible(true)}
+        onBlur={() => setVisible(false)}
+        className="text-[#9CA3AF] hover:text-[#EC5800] transition-colors"
+        aria-label="Ajuda"
+      >
+        <HelpCircle className="w-4 h-4" />
+      </button>
+      {visible && (
+        <div className="absolute z-50 left-6 top-0 w-72 bg-[#070738] text-white text-xs rounded-lg p-3 shadow-xl leading-relaxed">
+          {text}
+          <div className="absolute left-[-6px] top-2 w-0 h-0 border-t-4 border-b-4 border-r-8 border-transparent border-r-[#070738]" />
+        </div>
+      )}
+    </span>
+  );
+}
+
+// Componente Modal de Ajuda
+function HelpModal({
+  title,
+  items,
+  onClose,
+}: {
+  title: string;
+  items: { title: string; body: string }[];
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center gap-2 text-[#070738]">
+            <BookOpen className="w-5 h-5 text-[#EC5800]" />
+            <h3 className="text-lg font-semibold">{title}</h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-[#9CA3AF] hover:text-[#3D3D3D] transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="space-y-4">
+          {items.map((item, i) => (
+            <div key={i} className="bg-[#F0F4F8] rounded-lg p-4">
+              <p className="text-sm font-semibold text-[#070738] mb-1">{item.title}</p>
+              <p className="text-sm text-[#3D3D3D] leading-relaxed">{item.body}</p>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={onClose}
+          className="mt-5 w-full py-2 bg-[#EC5800] text-white rounded-lg hover:bg-[#d84f00] transition-colors text-sm font-medium"
+        >
+          Entendi, obrigado!
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export function CreateReport() {
@@ -39,6 +169,7 @@ export function CreateReport() {
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [professorNome, setProfessorNome] = useState("Professor");
   const [professorIdState, setProfessorIdState] = useState("");
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   const [selectedStudent, setSelectedStudent] = useState(studentId || "");
   const [classType, setClassType] = useState<ClassType>("regular");
@@ -68,7 +199,6 @@ export function CreateReport() {
   const [engagementHours, setEngagementHours] = useState("");
   const [observedHabits, setObservedHabits] = useState<string[]>([]);
 
-  // Carrega dados do professor e alunos
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (!user) { navigate("/"); return; }
@@ -88,7 +218,6 @@ export function CreateReport() {
     return unsubscribe;
   }, [navigate]);
 
-  // Carrega rascunho se reportId existir
   useEffect(() => {
     if (!reportId) return;
     const carregarDraft = async () => {
@@ -123,7 +252,6 @@ export function CreateReport() {
 
   const student = alunos.find(a => a.id === selectedStudent);
 
-  // Busca o cicloId ativo para o aluno selecionado
   const buscarCicloId = async (alunoId: string): Promise<string> => {
     try {
       const ciclosSnap = await getDocs(
@@ -134,7 +262,6 @@ export function CreateReport() {
         )
       );
       if (!ciclosSnap.empty) {
-        // Prefere ciclo com status != "concluido", senão pega o primeiro
         const ativo = ciclosSnap.docs.find(d => d.data().status !== "concluido");
         return (ativo || ciclosSnap.docs[0]).id;
       }
@@ -252,6 +379,15 @@ export function CreateReport() {
 
   return (
     <div className="min-h-screen bg-[#F0F4F8]">
+      {/* Modal de ajuda */}
+      {showHelpModal && (
+        <HelpModal
+          title={currentStep === 2 ? "Como preencher as Competências" : "Como preencher as Observações"}
+          items={currentStep === 2 ? HELP_CONTENT_COMPETENCIAS : HELP_CONTENT_OBSERVACOES}
+          onClose={() => setShowHelpModal(false)}
+        />
+      )}
+
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
@@ -272,7 +408,19 @@ export function CreateReport() {
       </header>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl text-[#070738] mb-2">{reportId ? "Continuar Rascunho" : "Criar Relatório"}</h1>
+        <div className="flex items-start justify-between mb-2">
+          <h1 className="text-3xl text-[#070738]">{reportId ? "Continuar Rascunho" : "Criar Relatório"}</h1>
+          {/* Botão de ajuda visível nas etapas de Competências e Observações */}
+          {(currentStep === 2 || currentStep === 3) && (
+            <button
+              onClick={() => setShowHelpModal(true)}
+              className="flex items-center gap-2 px-4 py-2 border border-[#EC5800] text-[#EC5800] rounded-lg hover:bg-[#EC5800] hover:text-white transition-colors text-sm font-medium"
+            >
+              <BookOpen className="w-4 h-4" />
+              Como preencher?
+            </button>
+          )}
+        </div>
         <p className="text-[#9CA3AF] mb-8">
           {student ? `Aluno: ${student.nome}` : "Selecione um aluno para começar"}
         </p>
@@ -280,6 +428,7 @@ export function CreateReport() {
         <Stepper steps={STEPS} currentStep={currentStep} />
 
         <div className="bg-white rounded-xl shadow-sm p-8 mb-6">
+          {/* STEP 0 — Dados Gerais (sem alterações) */}
           {currentStep === 0 && (
             <div className="space-y-6">
               <h2 className="text-2xl text-[#070738] mb-6">Dados Gerais</h2>
@@ -337,6 +486,7 @@ export function CreateReport() {
             </div>
           )}
 
+          {/* STEP 1 — Dados Quantitativos (sem alterações) */}
           {currentStep === 1 && (
             <div className="space-y-6">
               <h2 className="text-2xl text-[#070738] mb-6">Dados Quantitativos</h2>
@@ -376,22 +526,42 @@ export function CreateReport() {
             </div>
           )}
 
+          {/* STEP 2 — Competências COM tooltips e placeholders */}
           {currentStep === 2 && (
             <div className="space-y-8">
-              <h2 className="text-2xl text-[#070738] mb-6">Avaliação por Competências</h2>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl text-[#070738]">Avaliação por Competências</h2>
+              </div>
+
+              {/* Banner de dica rápida */}
+              <div className="bg-[#FFF7ED] border border-[#FED7AA] rounded-lg px-4 py-3 flex items-start gap-3 text-sm text-[#92400E]">
+                <HelpCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-[#EC5800]" />
+                <span>
+                  No campo <strong>"O que vejo"</strong>, descreva situações reais observadas em sala. Use os exemplos como guia — passe o mouse no <strong>?</strong> ao lado do nome de cada competência para entender o que avaliar.
+                </span>
+              </div>
+
               {competencies.map((comp, index) => (
                 <div key={comp.id} className="border border-gray-200 rounded-lg p-6 space-y-4">
-                  <h3 className="text-lg text-[#070738]">{comp.name}</h3>
+                  <h3 className="text-lg text-[#070738] flex items-center">
+                    {comp.name}
+                    <Tooltip text={COMPETENCY_TOOLTIPS[comp.name] || ""} />
+                  </h3>
                   <div>
                     <label className="block text-sm text-[#3D3D3D] mb-3">Nota (1-5)</label>
                     <RatingStars rating={comp.rating} onChange={(rating) => updateCompetencyRating(index, rating)} />
                   </div>
                   <div>
                     <label className="block text-sm text-[#3D3D3D] mb-2">O que vejo</label>
-                    <textarea value={comp.whatISee}
+                    <textarea
+                      value={comp.whatISee}
                       onChange={(e) => updateCompetencyField(index, "whatISee", e.target.value)}
-                      className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800] min-h-[100px]"
-                      placeholder="Descreva suas observações..." />
+                      className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800] min-h-[100px] text-sm"
+                      placeholder={COMPETENCY_PLACEHOLDERS[comp.name] || "Descreva suas observações..."}
+                    />
+                    <p className="text-xs text-[#9CA3AF] mt-1">
+                      Substitua [Nome] pelo nome do aluno. Este texto aparecerá no relatório do responsável.
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm text-[#3D3D3D] mb-2">Por que importa</label>
@@ -418,20 +588,29 @@ export function CreateReport() {
             </div>
           )}
 
+          {/* STEP 3 — Observações Finais COM placeholders e dicas */}
           {currentStep === 3 && (
             <div className="space-y-6">
               <h2 className="text-2xl text-[#070738] mb-6">Observações Finais</h2>
               <div>
-                <label className="block text-sm text-[#3D3D3D] mb-2">Voz do Professor *</label>
+                <label className="block text-sm text-[#3D3D3D] mb-1 flex items-center gap-1">
+                  Voz do Professor *
+                  <Tooltip text="Mensagem pessoal e encorajadora para o aluno e família. Mencione conquistas, momentos marcantes e o potencial que você enxerga. Tom: caloroso e motivador." />
+                </label>
                 <textarea value={professorVoice} onChange={(e) => setProfessorVoice(e.target.value)}
-                  className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800] min-h-[120px]"
-                  placeholder="Escreva uma mensagem pessoal ao aluno/família..." />
+                  className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800] min-h-[120px] text-sm"
+                  placeholder="Ex: Foi um prazer acompanhar o desenvolvimento de [Nome] neste ciclo. Sua dedicação e entusiasmo em sala foram notáveis, especialmente nos momentos de conversação. Tenho certeza que, mantendo este ritmo, os próximos passos serão ainda mais marcantes!" />
+                <p className="text-xs text-[#9CA3AF] mt-1">Escreva em 1º pessoa do professor. Tom positivo, pessoal e motivador.</p>
               </div>
               <div>
-                <label className="block text-sm text-[#3D3D3D] mb-2">Foco do Ciclo *</label>
+                <label className="block text-sm text-[#3D3D3D] mb-1 flex items-center gap-1">
+                  Foco do Ciclo *
+                  <Tooltip text="Descreva o objetivo pedagógico principal deste ciclo — o que foi trabalhado, quais habilidades foram priorizadas e o que foi alcançado." />
+                </label>
                 <textarea value={cycleFocus} onChange={(e) => setCycleFocus(e.target.value)}
-                  className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800] min-h-[100px]"
-                  placeholder="Descreva o objetivo deste período..." />
+                  className="w-full px-4 py-3 bg-[#F0F4F8] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EC5800] min-h-[100px] text-sm"
+                  placeholder="Ex: Neste ciclo, trabalhamos habilidades de comunicação oral com foco em situações cotidianas, ampliação de vocabulário temático e introdução a estruturas do nível B1. Os alunos participaram de role plays, debates em dupla e atividades de listening com diferentes sotaques." />
+                <p className="text-xs text-[#9CA3AF] mt-1">Pode ser o mesmo texto para todos os alunos da mesma turma.</p>
               </div>
               {evaluation === "2 de 2 ciclos" && (
                 <>
@@ -478,6 +657,7 @@ export function CreateReport() {
             </div>
           )}
 
+          {/* STEP 4 — Revisão (sem alterações) */}
           {currentStep === 4 && (
             <div className="space-y-6">
               <h2 className="text-2xl text-[#070738] mb-6">Revisão Final</h2>
