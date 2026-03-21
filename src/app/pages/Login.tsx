@@ -1,27 +1,59 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../../firebase";
+import { auth, db } from "../../firebase";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import logo from "../../imports/logo.svg";
+
 export default function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErro("");
     setCarregando(true);
     try {
       await signInWithEmailAndPassword(auth, email, senha);
+
+      // 1. Verifica se é Coordenador ou Secretaria na coleção "usuarios"
+      const usuariosSnap = await getDocs(
+        query(collection(db, "usuarios"), where("email", "==", email))
+      );
+
+      if (!usuariosSnap.empty) {
+        const userData = usuariosSnap.docs[0].data();
+        const role = userData.role?.toLowerCase();
+
+        if (role === "coordenador" || role === "secretaria" || role === "secretário" || role === "secretária") {
+          navigate("/secretaria");
+          return;
+        }
+      }
+
+      // 2. Verifica se é Professor na coleção "professores"
+      const professoresSnap = await getDocs(
+        query(collection(db, "professores"), where("email", "==", email))
+      );
+
+      if (!professoresSnap.empty) {
+        navigate("/professor");
+        return;
+      }
+
+      // 3. Fallback — vai para professor se não encontrar em nenhuma coleção
       navigate("/professor");
+
     } catch (err: any) {
       setErro("Email ou senha incorretos. Tente novamente.");
     } finally {
       setCarregando(false);
     }
   };
+
   return (
     <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#F0F4F8" }}>
       <div className="w-full max-w-md px-6">
